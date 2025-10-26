@@ -2,8 +2,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>NOTE LINK — v0.8S-FIX17</title>
-<!-- FIX17: 座標スケール追加（左上原点の定規表示） -->
+<title>NOTE LINK — v0.8S-FIX18</title>
+<!-- FIX18: paperRect計算タイミング修正（描画前に確実に計算） -->
 <style>
 :root{
   --ink:#e6f1ff;--ink-dim:#9bd6e9;--bg:#0b1020;--panel:#101827;--accent:#3f78ff;
@@ -128,7 +128,7 @@ body.tb-collapsed .tb-handle{ display:grid }
 </head>
 <body>
 <header class="topbar" id="topbar">
-  <div class="brand"><strong id="verText">NOTE LINK — v0.8S-FIX17</strong></div>
+  <div class="brand"><strong id="verText">NOTE LINK — v0.8S-FIX18</strong></div>
 
   <div class="rail-wrap" id="railWrap">
     <div class="rail-scroll" id="railScroll">
@@ -256,7 +256,7 @@ const cvPaper=$('#paper'), gPaper=cvPaper.getContext('2d');
 const cvGuide=$('#guide'), gGuide=cvGuide.getContext('2d');
 const cv=$('#paint'), ctx=cv.getContext('2d',{alpha:true});
 const textLayer=$('#textLayer');
-$('#verText').textContent='NOTE LINK — v0.8S-FIX17';
+$('#verText').textContent='NOTE LINK — v0.8S-FIX18';
 
 // デバッグ情報更新関数
 function updateDebugInfo(){
@@ -595,7 +595,7 @@ $('#btnPrint').onclick=()=>window.print();
 $('#btnShare').onclick=()=>{composite().toBlob(async b=>{const f=new File([b],'note.png',{type:'image/png'});if(navigator.share&&navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:'Note Link'})}catch(e){}}else{const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download='note-link.png';a.click();setTimeout(()=>URL.revokeObjectURL(u),800)}})};
 
 let fileHandle=null;
-function exportJSON(){ flushText(); return JSON.stringify({ v:'v0.8S-FIX17',
+function exportJSON(){ flushText(); return JSON.stringify({ v:'v0.8S-FIX18',
   pages: Pages.list.map(pg=>({strokes:pg.strokes||[],textsHTML:pg.textsHTML||'', bg:pg.bg && pg.bg.dataURL ? {dataURL:pg.bg.dataURL}:null})),
   idx: Pages.idx, grid:{on:gridOn,stepMM:gridStepMM,color:gridColor} }); }
 async function doSave(){ const blob=new Blob([exportJSON()],{type:'application/json'});
@@ -845,13 +845,18 @@ function boot(){
   
   updateRailOverflow();
   
-  // DOMとレイアウトが完全に準備できるまで待つ（100ms後に描画）
+  // DOMとレイアウトが完全に準備できるまで待つ（300ms後に描画、2段階で確実に）
   setTimeout(() => {
     updateViewportTransform(); 
-    fitCanvases(); 
-    drawPaper();
-    redrawAll();
-  }, 100);
+    fitCanvases();
+    // さらに50ms待ってもう一度計算（paperRectを確実に計算）
+    setTimeout(() => {
+      layoutPaper(); // paperRectを再計算
+      drawPaper();
+      redrawAll();
+      console.log('描画完了: paperRect=', paperRect);
+    }, 50);
+  }, 300);
 }
 boot();
 
