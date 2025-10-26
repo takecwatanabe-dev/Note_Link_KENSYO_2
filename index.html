@@ -2,8 +2,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>NOTE LINK — v0.8S-FIX9</title>
-<!-- FIX9 (2025-10-26 17:39 JST): 描画開始エリア制限を完全削除 -->
+<title>NOTE LINK — v0.8S-FIX10</title>
+<!-- FIX10: スワイプジェスチャー防止、日時表記削除 -->
 <style>
 :root{
   --ink:#e6f1ff;--ink-dim:#9bd6e9;--bg:#0b1020;--panel:#101827;--accent:#3f78ff;
@@ -16,6 +16,7 @@ html,body{
   font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Hiragino Kaku Gothic ProN",Meiryo,sans-serif;
   -webkit-user-select:none;user-select:none;overflow:hidden;
   overscroll-behavior: none;
+  overscroll-behavior-x: contain;
   touch-action: none;
 }
 
@@ -121,7 +122,7 @@ body.tb-collapsed .tb-handle{ display:grid }
 </head>
 <body>
 <header class="topbar" id="topbar">
-  <div class="brand"><strong id="verText">NOTE LINK — v0.8S-FIX9 (2025-10-26 17:39 JST)</strong></div>
+  <div class="brand"><strong id="verText">NOTE LINK — v0.8S-FIX10</strong></div>
 
   <div class="rail-wrap" id="railWrap">
     <div class="rail-scroll" id="railScroll">
@@ -241,7 +242,7 @@ const cvPaper=$('#paper'), gPaper=cvPaper.getContext('2d');
 const cvGuide=$('#guide'), gGuide=cvGuide.getContext('2d');
 const cv=$('#paint'), ctx=cv.getContext('2d',{alpha:true});
 const textLayer=$('#textLayer');
-$('#verText').textContent='NOTE LINK — v0.8S-FIX9 (2025-10-26 17:39 JST)';
+$('#verText').textContent='NOTE LINK — v0.8S-FIX10';
 
 /* ===== layout & zoom ===== */
 let zoom=1, panX=0, panY=0, W=0, H=0;
@@ -360,7 +361,7 @@ function syncUI(){ui.color.value=color;ui.size.value=size;ui.sizeVal.textContent
 function onPanelChange(){color=ui.color.value;size=+ui.size.value;alpha=(tool==='marker')?(+ui.alpha.value/100):alpha;ui.sizeVal.textContent=`${size}px (${pxToMm(size).toFixed(2)} mm)`;ui.alphaVal.textContent=Math.round(alpha*100)+'%';cap=ui.cap.value;straightToggle=ui.straight.checked;gridOn=ui.gOn.checked;gridStepMM=+ui.gStep.value;gridColor=ui.gColor.value;palmReject=ui.palm.checked;drawPaper();redrawAll();}
 Object.values(ui).forEach(el=>el.addEventListener('input',onPanelChange));
 
-/* ===== drawing (FIX9: 描画開始エリア制限を完全削除) ===== */
+/* ===== drawing (FIX10: スワイプジェスチャー防止) ===== */
 function pointerToCanvas(e){ const r=cv.getBoundingClientRect(); return { x:(e.clientX - r.left)*(cv.width/r.width), y:(e.clientY - r.top)*(cv.height/r.height) }; }
 // エリア判定を大幅に緩和（マージン200px追加）
 function inPaperXY(x,y){ 
@@ -406,9 +407,17 @@ function fromUV(u,v){ return {x:paperRect.x + u*paperRect.w, y:paperRect.y + v*p
 function onDown(e){
   if(tool==='hand'){ panning=true; cv.style.cursor='grabbing'; return; }
   
-  // 座標チェックを完全削除 - 画面のどこからでも描画開始可能
-  const p=pointerToCanvas(e);
+  // スワイプジェスチャー防止：画面端からの入力でもイベント伝播を完全停止
   e.preventDefault();
+  e.stopPropagation();
+  
+  // 画面端からの入力の場合、さらに強力にpreventDefault
+  const edgeMargin = 30; // 左右端30pxをスワイプ防止エリアに
+  if(e.clientX < edgeMargin || e.clientX > window.innerWidth - edgeMargin){
+    if(e.cancelable) e.preventDefault();
+  }
+  
+  const p=pointerToCanvas(e);
   
   // 既存の描画があっても無条件で保存して新しい描画を開始
   if(drawing && currentStroke && currentStroke.pts.length>1){
@@ -428,6 +437,9 @@ function onDown(e){
 function onMove(e){
   if(tool==='hand' && panning){ panX+=e.movementX||0; panY+=e.movementY||0; updateViewportTransform(); return; }
   if(!drawing) return; // pointerIdチェックを緩和
+  
+  // スワイプジェスチャー防止：描画中は常にpreventDefault
+  e.preventDefault();
   scheduleReset(); // タイマーリセット
   
   // pointerIdが違っても、描画中なら続ける
@@ -501,7 +513,7 @@ $('#btnPrint').onclick=()=>window.print();
 $('#btnShare').onclick=()=>{composite().toBlob(async b=>{const f=new File([b],'note.png',{type:'image/png'});if(navigator.share&&navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:'Note Link'})}catch(e){}}else{const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download='note-link.png';a.click();setTimeout(()=>URL.revokeObjectURL(u),800)}})};
 
 let fileHandle=null;
-function exportJSON(){ flushText(); return JSON.stringify({ v:'v0.8S-FIX9',
+function exportJSON(){ flushText(); return JSON.stringify({ v:'v0.8S-FIX10',
   pages: Pages.list.map(pg=>({strokes:pg.strokes||[],textsHTML:pg.textsHTML||'', bg:pg.bg && pg.bg.dataURL ? {dataURL:pg.bg.dataURL}:null})),
   idx: Pages.idx, grid:{on:gridOn,stepMM:gridStepMM,color:gridColor} }); }
 async function doSave(){ const blob=new Blob([exportJSON()],{type:'application/json'});
