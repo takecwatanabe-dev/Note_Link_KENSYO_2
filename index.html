@@ -2,8 +2,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>NOTE LINK — v0.8S-FIX11</title>
-<!-- FIX11: スワイプ時の自動保存対応（描画中も自動保存） -->
+<title>NOTE LINK — v0.8S-FIX12</title>
+<!-- FIX12: スワイプ後の自動復元機能（localStorageに自動保存・読み込み） -->
 <style>
 :root{
   --ink:#e6f1ff;--ink-dim:#9bd6e9;--bg:#0b1020;--panel:#101827;--accent:#3f78ff;
@@ -122,7 +122,7 @@ body.tb-collapsed .tb-handle{ display:grid }
 </head>
 <body>
 <header class="topbar" id="topbar">
-  <div class="brand"><strong id="verText">NOTE LINK — v0.8S-FIX11</strong></div>
+  <div class="brand"><strong id="verText">NOTE LINK — v0.8S-FIX12</strong></div>
 
   <div class="rail-wrap" id="railWrap">
     <div class="rail-scroll" id="railScroll">
@@ -242,7 +242,7 @@ const cvPaper=$('#paper'), gPaper=cvPaper.getContext('2d');
 const cvGuide=$('#guide'), gGuide=cvGuide.getContext('2d');
 const cv=$('#paint'), ctx=cv.getContext('2d',{alpha:true});
 const textLayer=$('#textLayer');
-$('#verText').textContent='NOTE LINK — v0.8S-FIX11';
+$('#verText').textContent='NOTE LINK — v0.8S-FIX12';
 
 /* ===== layout & zoom ===== */
 let zoom=1, panX=0, panY=0, W=0, H=0;
@@ -535,7 +535,7 @@ $('#btnPrint').onclick=()=>window.print();
 $('#btnShare').onclick=()=>{composite().toBlob(async b=>{const f=new File([b],'note.png',{type:'image/png'});if(navigator.share&&navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:'Note Link'})}catch(e){}}else{const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download='note-link.png';a.click();setTimeout(()=>URL.revokeObjectURL(u),800)}})};
 
 let fileHandle=null;
-function exportJSON(){ flushText(); return JSON.stringify({ v:'v0.8S-FIX11',
+function exportJSON(){ flushText(); return JSON.stringify({ v:'v0.8S-FIX12',
   pages: Pages.list.map(pg=>({strokes:pg.strokes||[],textsHTML:pg.textsHTML||'', bg:pg.bg && pg.bg.dataURL ? {dataURL:pg.bg.dataURL}:null})),
   idx: Pages.idx, grid:{on:gridOn,stepMM:gridStepMM,color:gridColor} }); }
 async function doSave(){ const blob=new Blob([exportJSON()],{type:'application/json'});
@@ -589,13 +589,58 @@ document.getElementById('btnSetBg_m').onclick=()=>setBackground();
 
 const hist=[], redoStack=[];
 function snapshot(){ flushText(); return {pages:JSON.parse(JSON.stringify(Pages.list.map(p=>({strokes:p.strokes,textsHTML:p.textsHTML,bg:p.bg?{dataURL:p.bg.dataURL}:null})))), idx:Pages.idx, grid:{on:gridOn,stepMM:gridStepMM,color:gridColor}}; }
-function pushHistory(){ hist.push(snapshot()); if(hist.length>40) hist.shift(); redoStack.length=0; updatePageIndicator(); }
+
+// localStorage自動保存機能
+function saveToLocalStorage(){
+  try{
+    const data = exportJSON();
+    localStorage.setItem('notelink_autosave', data);
+    localStorage.setItem('notelink_autosave_time', new Date().toISOString());
+  }catch(e){
+    console.warn('localStorage保存失敗:', e);
+  }
+}
+
+// localStorage自動読み込み機能
+function loadFromLocalStorage(){
+  try{
+    const data = localStorage.getItem('notelink_autosave');
+    if(!data) return false;
+    
+    const parsed = JSON.parse(data);
+    Pages.list=(parsed.pages||[]).map(pg=>{ 
+      const entry={strokes:pg.strokes||[],textsHTML:pg.textsHTML||'',bg:null};
+      if(pg.bg && pg.bg.dataURL){ const img=new Image(); img.src=pg.bg.dataURL; entry.bg={dataURL:pg.bg.dataURL,img}; } 
+      return entry; 
+    });
+    if(!Pages.list.length) Pages.list=[{strokes:[],textsHTML:'',bg:null}];
+    Pages.idx=Math.max(0,Math.min(Pages.list.length-1,parsed.idx||0));
+    gridOn=!!parsed.grid?.on; gridStepMM=parsed.grid?.stepMM||10; gridColor=parsed.grid?.color||'#b7bfd6';
+    textLayer.innerHTML=Pages.cur().textsHTML||''; 
+    updatePageIndicator(); 
+    drawPaper(); 
+    redrawAll();
+    return true;
+  }catch(e){
+    console.warn('localStorage読み込み失敗:', e);
+    return false;
+  }
+}
+
+function pushHistory(){ 
+  hist.push(snapshot()); 
+  if(hist.length>40) hist.shift(); 
+  redoStack.length=0; 
+  updatePageIndicator(); 
+  saveToLocalStorage(); // 履歴更新時にlocalStorageにも自動保存
+}
+
 function restoreSnap(s){
   Pages.list=s.pages.map(pg=>{ const entry={strokes:pg.strokes||[],textsHTML:pg.textsHTML||'',bg:null}; if(pg.bg&&pg.bg.dataURL){ const img=new Image(); img.src=pg.bg.dataURL; entry.bg={dataURL:pg.bg.dataURL,img}; } return entry; });
   Pages.idx=Math.max(0,Math.min(Pages.list.length-1,s.idx||0)); textLayer.innerHTML=Pages.cur().textsHTML||''; updatePageIndicator(); drawPaper(); redrawAll();
 }
-$('#btnUndo').onclick=()=>{ if(!hist.length) return; const cur=snapshot(); const prev=hist.pop(); redoStack.push(cur); restoreSnap(prev); };
-$('#btnRedo').onclick=()=>{ const nxt=redoStack.pop(); if(!nxt) return; hist.push(snapshot()); restoreSnap(nxt); };
+$('#btnUndo').onclick=()=>{ if(!hist.length) return; const cur=snapshot(); const prev=hist.pop(); redoStack.push(cur); restoreSnap(prev); saveToLocalStorage(); };
+$('#btnRedo').onclick=()=>{ const nxt=redoStack.pop(); if(!nxt) return; hist.push(snapshot()); restoreSnap(nxt); saveToLocalStorage(); };
 
 const rail = document.getElementById('railScroll');
 const railWrap = document.getElementById('railWrap');
@@ -721,35 +766,47 @@ function boot(){
   const leftSaved = localStorage.getItem('tbHandleX_L');
   const rightSaved = localStorage.getItem('tbHandleX_R');
   setDock( rightSaved && (!leftSaved || parseInt(rightSaved,10) > innerWidth/2) ? 'right' : 'left' );
+  
+  // localStorageから自動復元を試みる
+  const loaded = loadFromLocalStorage();
+  if(loaded){
+    console.log('前回のデータを復元しました');
+  }
+  
   updateViewportTransform(); fitCanvases(); setActiveTool('pen');
   updateHandleIcon(); applyHandleX(savedHandleX(isRightDock()?'R':'L'));
   panel.classList.remove('show'); $$('.tool[data-tool="settings"]').forEach(b=>b.classList.remove('active'));
   updatePageIndicator();
-  pushHistory();
+  
+  if(!loaded){
+    pushHistory(); // 新規の場合のみ初期履歴を作成
+  }
+  
   updateRailOverflow();
 }
 boot();
 
-/* ===== スワイプ時の自動保存 ===== */
+/* ===== スワイプ時の自動保存（FIX12: 強化版） ===== */
 // ページ離脱前に保存
 addEventListener('beforeunload', (e) => {
-  if(drawing && currentStroke && currentStroke.pts.length > 1){
-    pushHistory();
-  }
+  saveToLocalStorage(); // 常に保存
 });
 
 // ページが非表示になったときも保存（Androidのスワイプ対策）
 addEventListener('visibilitychange', () => {
-  if(document.hidden && drawing && currentStroke && currentStroke.pts.length > 1){
-    pushHistory();
+  if(document.hidden){
+    saveToLocalStorage(); // 常に保存
   }
 });
 
 // ページが非アクティブになったときも保存
 addEventListener('pagehide', () => {
-  if(drawing && currentStroke && currentStroke.pts.length > 1){
-    pushHistory();
-  }
+  saveToLocalStorage(); // 常に保存
+});
+
+// ページがフォーカスを失ったときも保存
+addEventListener('blur', () => {
+  saveToLocalStorage(); // 常に保存
 });
 </script>
 </body>
