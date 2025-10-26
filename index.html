@@ -2,8 +2,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>NOTE LINK — v0.8S-FIX3</title>
-<!-- FIX3: イベント処理完全書き直し、状態管理強化 -->
+<title>NOTE LINK — v0.8S-FIX4</title>
+<!-- FIX4: touch-action変更、左上以外で入力できない問題修正 -->
 <style>
 :root{
   --ink:#e6f1ff;--ink-dim:#9bd6e9;--bg:#0b1020;--panel:#101827;--accent:#3f78ff;
@@ -16,7 +16,6 @@ html,body{
   font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Hiragino Kaku Gothic ProN",Meiryo,sans-serif;
   -webkit-user-select:none;user-select:none;overflow:hidden;
   overscroll-behavior: none;
-  touch-action: none;
 }
 
 /* ===== Topbar ===== */
@@ -60,10 +59,10 @@ header.topbar{
 /* ===== Layout ===== */
 #wrap{position:relative;height:100%;padding-top:var(--topbar-h)}
 #stage{position:absolute;inset:0;padding-left:var(--toolbar-left);padding-right:var(--toolbar-right);}
-#viewport{position:absolute;inset:0;transform-origin:0 0;touch-action:none}
+#viewport{position:absolute;inset:0;transform-origin:0 0}
 #paper,#guide,#paint{position:absolute;left:var(--toolbar-left);top:0;right:var(--toolbar-right);bottom:0}
 #paper,#guide{z-index:100;pointer-events:none}
-#paint{z-index:120;touch-action:none;-webkit-touch-callout:none}
+#paint{z-index:120;-webkit-touch-callout:none}
 
 /* ===== Sidebar / Tools ===== */
 .sidebar{
@@ -121,7 +120,7 @@ body.tb-collapsed .tb-handle{ display:grid }
 </head>
 <body>
 <header class="topbar" id="topbar">
-  <div class="brand"><strong id="verText">NOTE LINK — v0.8S-FIX3</strong></div>
+  <div class="brand"><strong id="verText">NOTE LINK — v0.8S-FIX4</strong></div>
 
   <div class="rail-wrap" id="railWrap">
     <div class="rail-scroll" id="railScroll">
@@ -241,7 +240,7 @@ const cvPaper=$('#paper'), gPaper=cvPaper.getContext('2d');
 const cvGuide=$('#guide'), gGuide=cvGuide.getContext('2d');
 const cv=$('#paint'), ctx=cv.getContext('2d',{alpha:true});
 const textLayer=$('#textLayer');
-$('#verText').textContent='NOTE LINK — v0.8S-FIX3';
+$('#verText').textContent='NOTE LINK — v0.8S-FIX4';
 
 /* ===== layout & zoom ===== */
 let zoom=1, panX=0, panY=0, W=0, H=0;
@@ -506,11 +505,6 @@ cv.addEventListener('pointermove', onMove, {passive:false});
 cv.addEventListener('pointerup', onUp, {passive:false});
 cv.addEventListener('pointercancel', onCancel, {passive:false});
 
-// タッチイベントのpreventDefault強化
-cv.addEventListener('touchstart', e => e.preventDefault(), {passive:false});
-cv.addEventListener('touchmove', e => e.preventDefault(), {passive:false});
-cv.addEventListener('touchend', e => e.preventDefault(), {passive:false});
-
 addEventListener('keydown',e=>{ if(e.key==='Shift') straightKey=true; });
 addEventListener('keyup',e=>{ if(e.key==='Shift') straightKey=false; });
 
@@ -543,7 +537,7 @@ $('#btnPrint').onclick=()=>window.print();
 $('#btnShare').onclick=()=>{composite().toBlob(async b=>{const f=new File([b],'note.png',{type:'image/png'});if(navigator.share&&navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:'Note Link'})}catch(e){}}else{const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download='note-link.png';a.click();setTimeout(()=>URL.revokeObjectURL(u),800)}})};
 
 let fileHandle=null;
-function exportJSON(){ flushText(); return JSON.stringify({ v:'v0.8S-FIX3',
+function exportJSON(){ flushText(); return JSON.stringify({ v:'v0.8S-FIX4',
   pages: Pages.list.map(pg=>({strokes:pg.strokes||[],textsHTML:pg.textsHTML||'', bg:pg.bg && pg.bg.dataURL ? {dataURL:pg.bg.dataURL}:null})),
   idx: Pages.idx, grid:{on:gridOn,stepMM:gridStepMM,color:gridColor} }); }
 async function doSave(){ const blob=new Blob([exportJSON()],{type:'application/json'});
