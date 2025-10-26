@@ -2,8 +2,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>NOTE LINK — v0.8S-FIX16</title>
-<!-- FIX16: デバッグ情報表示（右上にエリアサイズとスケール表示） -->
+<title>NOTE LINK — v0.8S-FIX17</title>
+<!-- FIX17: 座標スケール追加（左上原点の定規表示） -->
 <style>
 :root{
   --ink:#e6f1ff;--ink-dim:#9bd6e9;--bg:#0b1020;--panel:#101827;--accent:#3f78ff;
@@ -128,7 +128,7 @@ body.tb-collapsed .tb-handle{ display:grid }
 </head>
 <body>
 <header class="topbar" id="topbar">
-  <div class="brand"><strong id="verText">NOTE LINK — v0.8S-FIX16</strong></div>
+  <div class="brand"><strong id="verText">NOTE LINK — v0.8S-FIX17</strong></div>
 
   <div class="rail-wrap" id="railWrap">
     <div class="rail-scroll" id="railScroll">
@@ -256,7 +256,7 @@ const cvPaper=$('#paper'), gPaper=cvPaper.getContext('2d');
 const cvGuide=$('#guide'), gGuide=cvGuide.getContext('2d');
 const cv=$('#paint'), ctx=cv.getContext('2d',{alpha:true});
 const textLayer=$('#textLayer');
-$('#verText').textContent='NOTE LINK — v0.8S-FIX16';
+$('#verText').textContent='NOTE LINK — v0.8S-FIX17';
 
 // デバッグ情報更新関数
 function updateDebugInfo(){
@@ -265,6 +265,41 @@ function updateDebugInfo(){
   $('#dbgZoom').textContent=`${(zoom*100).toFixed(0)}%`;
   $('#dbgPan').textContent=`(${Math.round(panX)},${Math.round(panY)})`;
   $('#dbgStrokes').textContent=`${Pages.cur().strokes.length}`;
+}
+
+// 座標スケール（定規）を描画
+function drawScale(){
+  const c = ctx;
+  c.save();
+  c.globalCompositeOperation = 'source-over';
+  c.strokeStyle = '#ff0000';
+  c.fillStyle = '#ff0000';
+  c.font = '10px monospace';
+  c.lineWidth = 1;
+  
+  // 縦軸（左端）
+  for(let y = 0; y <= H; y += 100){
+    c.beginPath();
+    c.moveTo(0, y);
+    c.lineTo(10, y);
+    c.stroke();
+    c.fillText(y, 12, y + 3);
+  }
+  
+  // 横軸（上端）
+  for(let x = 0; x <= W; x += 100){
+    c.beginPath();
+    c.moveTo(x, 0);
+    c.lineTo(x, 10);
+    c.stroke();
+    c.save();
+    c.translate(x + 2, 20);
+    c.rotate(-Math.PI / 2);
+    c.fillText(x, 0, 0);
+    c.restore();
+  }
+  
+  c.restore();
 }
 
 /* ===== layout & zoom ===== */
@@ -543,6 +578,7 @@ function redrawAll(){
     ctx.stroke();
   }
   ctx.restore();
+  drawScale(); // 座標スケール描画
   updateDebugInfo(); // デバッグ情報更新
 }
 
@@ -559,7 +595,7 @@ $('#btnPrint').onclick=()=>window.print();
 $('#btnShare').onclick=()=>{composite().toBlob(async b=>{const f=new File([b],'note.png',{type:'image/png'});if(navigator.share&&navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:'Note Link'})}catch(e){}}else{const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download='note-link.png';a.click();setTimeout(()=>URL.revokeObjectURL(u),800)}})};
 
 let fileHandle=null;
-function exportJSON(){ flushText(); return JSON.stringify({ v:'v0.8S-FIX16',
+function exportJSON(){ flushText(); return JSON.stringify({ v:'v0.8S-FIX17',
   pages: Pages.list.map(pg=>({strokes:pg.strokes||[],textsHTML:pg.textsHTML||'', bg:pg.bg && pg.bg.dataURL ? {dataURL:pg.bg.dataURL}:null})),
   idx: Pages.idx, grid:{on:gridOn,stepMM:gridStepMM,color:gridColor} }); }
 async function doSave(){ const blob=new Blob([exportJSON()],{type:'application/json'});
