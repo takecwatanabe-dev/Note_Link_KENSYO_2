@@ -2,8 +2,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>NOTE LINK — v0.8S-FIX15</title>
-<!-- FIX15: 描画エリア計算修正（十分な待機時間を確保） -->
+<title>NOTE LINK — v0.8S-FIX16</title>
+<!-- FIX16: デバッグ情報表示（右上にエリアサイズとスケール表示） -->
 <style>
 :root{
   --ink:#e6f1ff;--ink-dim:#9bd6e9;--bg:#0b1020;--panel:#101827;--accent:#3f78ff;
@@ -118,11 +118,17 @@ body.tb-collapsed .tb-handle{ display:grid }
 #morePanel{position:fixed;right:10px;top:calc(var(--topbar-h) + 6px);z-index:3000;display:none;
   background:var(--panel);border:1px solid #ffffff24;border-radius:12px;box-shadow:var(--shadow);padding:8px}
 #morePanel .btn{margin:4px 0;display:block;width:100%}
+#debugInfo{
+  position:fixed;top:60px;right:10px;background:rgba(0,0,0,0.8);color:#0f0;
+  padding:10px;font-family:monospace;font-size:12px;z-index:10000;
+  border:1px solid #0f0;border-radius:4px;pointer-events:none;
+}
+#debugInfo div{margin:2px 0;}
 </style>
 </head>
 <body>
 <header class="topbar" id="topbar">
-  <div class="brand"><strong id="verText">NOTE LINK — v0.8S-FIX15</strong></div>
+  <div class="brand"><strong id="verText">NOTE LINK — v0.8S-FIX16</strong></div>
 
   <div class="rail-wrap" id="railWrap">
     <div class="rail-scroll" id="railScroll">
@@ -233,6 +239,14 @@ body.tb-collapsed .tb-handle{ display:grid }
   </div>
 </div></div>
 
+<div id="debugInfo">
+  <div>Canvas: <span id="dbgCanvas">-</span></div>
+  <div>Paper: <span id="dbgPaper">-</span></div>
+  <div>Zoom: <span id="dbgZoom">-</span></div>
+  <div>Pan: <span id="dbgPan">-</span></div>
+  <div>Strokes: <span id="dbgStrokes">-</span></div>
+</div>
+
 <script>
 /* ===== util & nodes ===== */
 const $=s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
@@ -242,7 +256,16 @@ const cvPaper=$('#paper'), gPaper=cvPaper.getContext('2d');
 const cvGuide=$('#guide'), gGuide=cvGuide.getContext('2d');
 const cv=$('#paint'), ctx=cv.getContext('2d',{alpha:true});
 const textLayer=$('#textLayer');
-$('#verText').textContent='NOTE LINK — v0.8S-FIX15';
+$('#verText').textContent='NOTE LINK — v0.8S-FIX16';
+
+// デバッグ情報更新関数
+function updateDebugInfo(){
+  $('#dbgCanvas').textContent=`${W}x${H}`;
+  $('#dbgPaper').textContent=`${Math.round(paperRect.w)}x${Math.round(paperRect.h)} @(${Math.round(paperRect.x)},${Math.round(paperRect.y)})`;
+  $('#dbgZoom').textContent=`${(zoom*100).toFixed(0)}%`;
+  $('#dbgPan').textContent=`(${Math.round(panX)},${Math.round(panY)})`;
+  $('#dbgStrokes').textContent=`${Pages.cur().strokes.length}`;
+}
 
 /* ===== layout & zoom ===== */
 let zoom=1, panX=0, panY=0, W=0, H=0;
@@ -520,6 +543,7 @@ function redrawAll(){
     ctx.stroke();
   }
   ctx.restore();
+  updateDebugInfo(); // デバッグ情報更新
 }
 
 /* ===== output/save/load ===== */
@@ -535,7 +559,7 @@ $('#btnPrint').onclick=()=>window.print();
 $('#btnShare').onclick=()=>{composite().toBlob(async b=>{const f=new File([b],'note.png',{type:'image/png'});if(navigator.share&&navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:'Note Link'})}catch(e){}}else{const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download='note-link.png';a.click();setTimeout(()=>URL.revokeObjectURL(u),800)}})};
 
 let fileHandle=null;
-function exportJSON(){ flushText(); return JSON.stringify({ v:'v0.8S-FIX15',
+function exportJSON(){ flushText(); return JSON.stringify({ v:'v0.8S-FIX16',
   pages: Pages.list.map(pg=>({strokes:pg.strokes||[],textsHTML:pg.textsHTML||'', bg:pg.bg && pg.bg.dataURL ? {dataURL:pg.bg.dataURL}:null})),
   idx: Pages.idx, grid:{on:gridOn,stepMM:gridStepMM,color:gridColor} }); }
 async function doSave(){ const blob=new Blob([exportJSON()],{type:'application/json'});
