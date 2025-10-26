@@ -1,0 +1,65 @@
+const textLayer=$('#textLayer');
+$('#verText').textContent='NOTE LINK — v0.8S';
+
+/* ===== sanitize (XSS mitigation for text layer HTML) ===== */
+function sanitizeHTML(html){
+  const tpl=document.createElement('template');
+  tpl.innerHTML=html||'';
+  const forbidden=new Set(['SCRIPT','STYLE','LINK','META','IFRAME','OBJECT','EMBED','SVG','MATH','BASE']);
+  const walker=document.createTreeWalker(tpl.content, NodeFilter.SHOW_ELEMENT, null);
+  const toRemove=[];
+  while(walker.nextNode()){
+    const el=walker.currentNode;
+    if(forbidden.has(el.tagName)){
+      toRemove.push(el);
+      continue;
+    }
+    for(const attr of Array.from(el.attributes)){
+      const name=attr.name.toLowerCase();
+      const val=attr.value||'';
+      if(name.startsWith('on')){ el.removeAttribute(attr.name); continue; }
+      if((name==='href'||name==='src') && /^\s*javascript:/i.test(val)){ el.removeAttribute(attr.name); continue; }
+    }
+  }
+  toRemove.forEach(n=>n.remove());
+  return tpl.innerHTML;
+}
+
+/* ===== layout & zoom ===== */
+let zoom=1, panX=0, panY=0, W=0, H=0;
+function applyBars(){ const h=Math.round(topbar.getBoundingClientRect().height)||44; document.documentElement.style.setProperty('--topbar-h',h+'px'); }
+
+/* ===== pages ===== */
+const Pages={ list:[{strokes:[],textsHTML:'',bg:null}], idx:0, cur(){ return this.list[this.idx]; } };
+function setPage(i){ i=Math.max(0, Math.min(Pages.list.length-1, i)); Pages.cur().textsHTML=textLayer.innerHTML; Pages.idx=i; textLayer.innerHTML=sanitizeHTML(Pages.cur().textsHTML||''); updatePageIndicator(); drawPaper(); redrawAll(); }
+function updatePageIndicator(){ $('#pageIndicator').textContent=(Pages.idx+1)+'/'+Pages.list.length; $('#pageIndicator_m').textContent=(Pages.idx+1)+'/'+Pages.list.length; }
+function addPage(){ const pos=Pages.idx+1; Pages.list.splice(pos,0,{strokes:[],textsHTML:'',bg:null}); setPage(pos); pushHistory(); }
+function prevPage(){ setPage(Pages.idx-1); }
+}
+function showGuide(sx,sy,ex,ey){ gGuide.clearRect(0,0,cvGuide.width,cvGuide.height);
+  gGuide.save(); gGuide.setLineDash([6*DPR,6*DPR]); gGuide.lineWidth=Math.max(1,Math.round(size*DPR));
+  gGuide.lineCap=cap; gGuide.strokeStyle:'#7ec8ff'; gGuide.beginPath(); gGuide.moveTo(sx,sy); gGuide.lineTo(ex,ey); gGuide.stroke(); gGuide.restore(); }
+function clearGuide(){ gGuide.clearRect(0,0,cvGuide.width,cvGuide.height); }
+function toUV(x,y){ return {u:(x-paperRect.x)/paperRect.w, v:(y-paperRect.y)/paperRect.h}; }
+function fromUV(u,v){ return {x:paperRect.x + u*paperRect.w, y:paperRect.y + v*paperRect.h}; }
+    if(!Pages.list.length) Pages.list=[{strokes:[],textsHTML:'',bg:null}];
+    Pages.idx=Math.max(0,Math.min(Pages.list.length-1,data.idx||0));
+    gridOn=!!data.grid?.on; gridStepMM=data.grid?.stepMM||10; gridColor=data.grid?.color||'#b7bfd6';
+    textLayer.innerHTML=sanitizeHTML(Pages.cur().textsHTML||''); updatePageIndicator(); drawPaper(); redrawAll(); pushHistory();
+  }catch(e){} }
+$('#btnSave').onclick=doSave; $('#btnLoad').onclick=doLoad;
+
+  Pages.cur().bg=bg; drawPaper(); redrawAll(); pushHistory();
+}
+document.getElementById('btnSetBg').onclick=()=>setBackground();
+
+/* ===== undo/redo ===== */
+const hist=[], redoStack=[];
+function snapshot(){ flushText(); return {pages:JSON.parse(JSON.stringify(Pages.list.map(p=>({strokes:p.strokes,textsHTML:p.textsHTML,bg:p.bg?{dataURL:p.bg.dataURL}:null})))), idx:Pages.idx, grid:{on:gridOn,stepMM:gridStepMM,color:gridColor}}; }
+function pushHistory(){ hist.push(snapshot()); if(hist.length>40) hist.shift(); redoStack.length=0; updatePageIndicator(); }
+function restoreSnap(s){
+  Pages.list=s.pages.map(pg=>{ const entry={strokes:pg.strokes||[],textsHTML:pg.textsHTML||'',bg:null}; if(pg.bg && pg.bg.dataURL){ const img=new Image(); img.src=pg.bg.dataURL; entry.bg={dataURL:pg.bg.dataURL,img}; } return entry; });
+  Pages.idx=Math.max(0,Math.min(Pages.list.length-1,s.idx||0)); textLayer.innerHTML=sanitizeHTML(Pages.cur().textsHTML||''); updatePageIndicator(); drawPaper(); redrawAll();
+}
+$('#btnUndo').onclick=()=>{ if(!hist.length) return; const cur=snapshot(); const prev=hist.pop(); redoStack.push(cur); restoreSnap(prev); };
+$('#btnRedo').onclick=()=>{ const nxt=redoStack.pop(); if(!nxt) return; hist.push(snapshot()); restoreSnap(nxt); };
