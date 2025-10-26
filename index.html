@@ -2,8 +2,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>NOTE LINK — v0.8S-FIX10</title>
-<!-- FIX10: スワイプジェスチャー防止、日時表記削除 -->
+<title>NOTE LINK — v0.8S-FIX11</title>
+<!-- FIX11: スワイプ時の自動保存対応（描画中も自動保存） -->
 <style>
 :root{
   --ink:#e6f1ff;--ink-dim:#9bd6e9;--bg:#0b1020;--panel:#101827;--accent:#3f78ff;
@@ -122,7 +122,7 @@ body.tb-collapsed .tb-handle{ display:grid }
 </head>
 <body>
 <header class="topbar" id="topbar">
-  <div class="brand"><strong id="verText">NOTE LINK — v0.8S-FIX10</strong></div>
+  <div class="brand"><strong id="verText">NOTE LINK — v0.8S-FIX11</strong></div>
 
   <div class="rail-wrap" id="railWrap">
     <div class="rail-scroll" id="railScroll">
@@ -242,7 +242,7 @@ const cvPaper=$('#paper'), gPaper=cvPaper.getContext('2d');
 const cvGuide=$('#guide'), gGuide=cvGuide.getContext('2d');
 const cv=$('#paint'), ctx=cv.getContext('2d',{alpha:true});
 const textLayer=$('#textLayer');
-$('#verText').textContent='NOTE LINK — v0.8S-FIX10';
+$('#verText').textContent='NOTE LINK — v0.8S-FIX11';
 
 /* ===== layout & zoom ===== */
 let zoom=1, panX=0, panY=0, W=0, H=0;
@@ -361,7 +361,7 @@ function syncUI(){ui.color.value=color;ui.size.value=size;ui.sizeVal.textContent
 function onPanelChange(){color=ui.color.value;size=+ui.size.value;alpha=(tool==='marker')?(+ui.alpha.value/100):alpha;ui.sizeVal.textContent=`${size}px (${pxToMm(size).toFixed(2)} mm)`;ui.alphaVal.textContent=Math.round(alpha*100)+'%';cap=ui.cap.value;straightToggle=ui.straight.checked;gridOn=ui.gOn.checked;gridStepMM=+ui.gStep.value;gridColor=ui.gColor.value;palmReject=ui.palm.checked;drawPaper();redrawAll();}
 Object.values(ui).forEach(el=>el.addEventListener('input',onPanelChange));
 
-/* ===== drawing (FIX10: スワイプジェスチャー防止) ===== */
+/* ===== drawing (FIX11: スワイプ時の自動保存) ===== */
 function pointerToCanvas(e){ const r=cv.getBoundingClientRect(); return { x:(e.clientX - r.left)*(cv.width/r.width), y:(e.clientY - r.top)*(cv.height/r.height) }; }
 // エリア判定を大幅に緩和（マージン200px追加）
 function inPaperXY(x,y){ 
@@ -372,6 +372,7 @@ function inPaperXY(x,y){
 let drawing=false, panning=false, start={x:0,y:0}, last={x:0,y:0};
 let drawingPointerId=null;
 let currentStroke=null;
+let currentStrokeIndex=-1; // 現在のストロークのPages内のインデックス
 let resetTimer=null;
 
 // 状態を完全にリセットする関数
@@ -380,6 +381,7 @@ function forceResetDrawing(){
   panning=false;
   drawingPointerId=null;
   currentStroke=null;
+  currentStrokeIndex=-1;
   clearGuide();
   cv.style.cursor=(tool==='hand')?'grab':(tool==='keyboard')?'text':'crosshair';
   if(resetTimer){ clearTimeout(resetTimer); resetTimer=null; }
@@ -419,8 +421,8 @@ function onDown(e){
   
   const p=pointerToCanvas(e);
   
-  // 既存の描画があっても無条件で保存して新しい描画を開始
-  if(drawing && currentStroke && currentStroke.pts.length>1){
+  // 既存の描画がある場合は保存（インデックスが設定されていない場合のみpush）
+  if(drawing && currentStroke && currentStroke.pts.length>1 && currentStrokeIndex===-1){
     Pages.cur().strokes.push(currentStroke);
     pushHistory();
   }
@@ -432,6 +434,11 @@ function onDown(e){
   clearGuide();
   currentStroke={tool:(tool==='marker'?'marker':tool==='eraser'?'eraser':'pen'),
     color:(tool==='marker'||tool==='pen')?color:'#000000', alpha:(tool==='marker')?alpha:1, cap:cap, sizeU:(size/paperRect.h), pts:[toUV(p.x,p.y)]};
+  
+  // ストロークを即座にPages.cur().strokesに追加（スワイプ対策）
+  Pages.cur().strokes.push(currentStroke);
+  currentStrokeIndex = Pages.cur().strokes.length - 1;
+  
   scheduleReset(); // 自動リセットタイマー開始
 }
 function onMove(e){
@@ -452,9 +459,16 @@ function onMove(e){
   if(straight){ showGuide(start.x,start.y,p.x,p.y); return; }
   const evs=(e.getCoalescedEvents&&e.getCoalescedEvents())||[e];
   setCtx(); ctx.beginPath(); ctx.moveTo(last.x,last.y);
+  
+  const ptsBefore = currentStroke.pts.length;
   // エリアチェックを削除し、全ての座標で描画可能に
   for(const ev of evs){ const q=pointerToCanvas(ev); ctx.lineTo(q.x,q.y); currentStroke.pts.push(toUV(q.x,q.y)); last=q; }
   ctx.stroke();
+  
+  // 10ポイントごとに履歴を保存（スワイプ対策）
+  if(currentStroke.pts.length - ptsBefore >= 10){
+    pushHistory();
+  }
 }
 function onUp(e){
   if(tool==='hand' && panning){ panning=false; cv.style.cursor='grab'; return; }
@@ -464,7 +478,15 @@ function onUp(e){
   }
   const p=pointerToCanvas(e); const straight=(straightKey||$('#uiStraight').checked);
   if(straight){ setCtx(); ctx.beginPath(); ctx.moveTo(start.x,start.y); ctx.lineTo(p.x,p.y); ctx.stroke(); currentStroke.pts.push(toUV(p.x,p.y)); }
-  if(currentStroke && currentStroke.pts.length>1){ Pages.cur().strokes.push(currentStroke); pushHistory(); }
+  
+  // ストロークは既にonDownでPages.cur().strokesに追加されているので重複保存しない
+  // ただし、ポイントが1つしかない場合は削除
+  if(currentStroke && currentStroke.pts.length <= 1 && currentStrokeIndex !== -1){
+    Pages.cur().strokes.splice(currentStrokeIndex, 1);
+  }
+  
+  // 最終的に履歴を保存
+  pushHistory();
   forceResetDrawing(); // 確実にリセット
 }
 function onCancel(e){
@@ -513,7 +535,7 @@ $('#btnPrint').onclick=()=>window.print();
 $('#btnShare').onclick=()=>{composite().toBlob(async b=>{const f=new File([b],'note.png',{type:'image/png'});if(navigator.share&&navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:'Note Link'})}catch(e){}}else{const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download='note-link.png';a.click();setTimeout(()=>URL.revokeObjectURL(u),800)}})};
 
 let fileHandle=null;
-function exportJSON(){ flushText(); return JSON.stringify({ v:'v0.8S-FIX10',
+function exportJSON(){ flushText(); return JSON.stringify({ v:'v0.8S-FIX11',
   pages: Pages.list.map(pg=>({strokes:pg.strokes||[],textsHTML:pg.textsHTML||'', bg:pg.bg && pg.bg.dataURL ? {dataURL:pg.bg.dataURL}:null})),
   idx: Pages.idx, grid:{on:gridOn,stepMM:gridStepMM,color:gridColor} }); }
 async function doSave(){ const blob=new Blob([exportJSON()],{type:'application/json'});
@@ -707,6 +729,28 @@ function boot(){
   updateRailOverflow();
 }
 boot();
+
+/* ===== スワイプ時の自動保存 ===== */
+// ページ離脱前に保存
+addEventListener('beforeunload', (e) => {
+  if(drawing && currentStroke && currentStroke.pts.length > 1){
+    pushHistory();
+  }
+});
+
+// ページが非表示になったときも保存（Androidのスワイプ対策）
+addEventListener('visibilitychange', () => {
+  if(document.hidden && drawing && currentStroke && currentStroke.pts.length > 1){
+    pushHistory();
+  }
+});
+
+// ページが非アクティブになったときも保存
+addEventListener('pagehide', () => {
+  if(drawing && currentStroke && currentStroke.pts.length > 1){
+    pushHistory();
+  }
+});
 </script>
 </body>
 </html>
