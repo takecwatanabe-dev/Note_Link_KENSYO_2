@@ -2,8 +2,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>NOTE LINK — v0.8S (RS6a-HF2)</title>
-<!-- RS6a-HF2: 左ドック開閉ズレ修正 / モバイルのリロード抑止 / スライダー維持（UIは不変） -->
+<title>NOTE LINK — v0.8S-FIX1</title>
+<!-- FIX1: Androidタブレット向けタッチ処理修正 -->
 <style>
 :root{
   --ink:#e6f1ff;--ink-dim:#9bd6e9;--bg:#0b1020;--panel:#101827;--accent:#3f78ff;
@@ -14,12 +14,12 @@
 html,body{
   height:100%;margin:0;background:var(--bg);color:var(--ink);
   font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Hiragino Kaku Gothic ProN",Meiryo,sans-serif;
-  -webkit-user-select:none;user-select:none;overflow:hidden;              /* ★ 縦横スクロール無効 */
-  overscroll-behavior: none;                                             /* ★ P2R等の既定ジェスチャー無効 */
-  touch-action: none;                                                    /* ★ 全域の既定タッチ動作を止める */
+  -webkit-user-select:none;user-select:none;overflow:hidden;
+  overscroll-behavior: none;
+  touch-action: none;
 }
 
-/* ===== Topbar (RS6) ===== */
+/* ===== Topbar ===== */
 header.topbar{
   position:fixed;top:0;left:0;right:0;z-index:2000;height:var(--topbar-h);
   display:flex;align-items:center;gap:8px;padding:0 10px;font-size:12px;color:#fff;
@@ -35,9 +35,8 @@ header.topbar{
   overflow-x:auto; overflow-y:hidden; display:flex; align-items:center; gap:8px;
   white-space:nowrap; -webkit-overflow-scrolling:touch;
   cursor:grab; user-select:none; -webkit-user-select:none;
-  touch-action: pan-x;                                                   /* ★ ヘッダーだけ横パン許可 */
+  touch-action: pan-x;
 }
-/* スクロールバーは表示（非表示指定なし） */
 .topbar .rail-scroll.dragging{ cursor:grabbing }
 .topbar .right-fixed{flex:0 0 auto;display:flex;align-items:center;gap:8px}
 .topbar .btn{height:28px;padding:0 10px;border-radius:10px;background:#ffffff33;
@@ -45,7 +44,6 @@ header.topbar{
 .topbar .btn:active{transform:translateY(1px)}
 .build{opacity:.8}
 
-/* フェード＆ヒント */
 .rail-fade{position:absolute;top:0;bottom:0;width:28px;pointer-events:none;opacity:0;transition:opacity .2s}
 .rail-fade.left{left:0;background:linear-gradient(to right,rgba(0,0,0,.35),rgba(0,0,0,0))}
 .rail-fade.right{right:0;background:linear-gradient(to left,rgba(0,0,0,.35),rgba(0,0,0,0))}
@@ -62,7 +60,7 @@ header.topbar{
 /* ===== Layout ===== */
 #wrap{position:relative;height:100%;padding-top:var(--topbar-h)}
 #stage{position:absolute;inset:0;padding-left:var(--toolbar-left);padding-right:var(--toolbar-right);}
-#viewport{position:absolute;inset:0;transform-origin:0 0;touch-action:none}      /* 描画面は既定を抑止 */
+#viewport{position:absolute;inset:0;transform-origin:0 0;touch-action:none}
 #paper,#guide,#paint{position:absolute;left:var(--toolbar-left);top:0;right:var(--toolbar-right);bottom:0}
 #paper,#guide{z-index:100;pointer-events:none}
 #paint{z-index:120;touch-action:none;-webkit-touch-callout:none}
@@ -82,11 +80,9 @@ body.tb-right .sidebar{left:auto; right:0;}
 .tool.active{outline:1px solid var(--ok)}
 .tool svg{width:18px;height:18px;stroke:var(--ink);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 
-/* 折り畳み時：全幅化＆サイドバー非表示 */
 body.tb-collapsed{ --toolbar-left:0px; --toolbar-right:0px; }
 body.tb-collapsed .sidebar{ display:none }
 
-/* 折り畳み時のみ “三角ハンドル”（閉=▼ / 開=▲） */
 .tb-handle{
   position:fixed;z-index:1600;top:calc(var(--topbar-h) + 8px);left:8px;
   width:36px;height:36px;border-radius:10px;display:none;place-items:center;
@@ -125,7 +121,7 @@ body.tb-collapsed .tb-handle{ display:grid }
 </head>
 <body>
 <header class="topbar" id="topbar">
-  <div class="brand"><strong id="verText">NOTE LINK — v0.8S</strong></div>
+  <div class="brand"><strong id="verText">NOTE LINK — v0.8S-FIX1</strong></div>
 
   <div class="rail-wrap" id="railWrap">
     <div class="rail-scroll" id="railScroll">
@@ -213,7 +209,7 @@ body.tb-collapsed .tb-handle{ display:grid }
   </div>
   <div class="row" id="rowPenExt">
     <label>ペン拡張</label>
-    <label><input type="checkbox" id="uiPalm" checked> パーム除外</label>
+    <label><input type="checkbox" id="uiPalm"> パーム除外</label>
     <label><input type="checkbox" id="uiPressure" checked> 圧力</label>
     <label><input type="checkbox" id="uiTilt" checked> 傾き</label>
   </div>
@@ -245,7 +241,7 @@ const cvPaper=$('#paper'), gPaper=cvPaper.getContext('2d');
 const cvGuide=$('#guide'), gGuide=cvGuide.getContext('2d');
 const cv=$('#paint'), ctx=cv.getContext('2d',{alpha:true});
 const textLayer=$('#textLayer');
-$('#verText').textContent='NOTE LINK — v0.8S';
+$('#verText').textContent='NOTE LINK — v0.8S-FIX1';
 
 /* ===== layout & zoom ===== */
 let zoom=1, panX=0, panY=0, W=0, H=0;
@@ -317,7 +313,7 @@ const perTool={ pen:{color:'#000000',size:4,alpha:1,cap:'round',straight:false},
   marker:{color:'#ffff00',size:16,alpha:.5,cap:'butt',straight:false},
   eraser:{size:24}, hand:{}, keyboard:{} };
 let color=perTool.pen.color, size=perTool.pen.size, alpha=1, cap='round';
-let straightToggle=false, straightKey=false; let palmReject=true, pressureOn=true, tiltOn=true;
+let straightToggle=false, straightKey=false; let palmReject=false, pressureOn=true, tiltOn=true;
 
 function saveToolState(k){const p=perTool[k]||(perTool[k]={}); p.color=color;p.size=size;p.alpha=alpha;p.cap=cap;p.straight=!!straightToggle;}
 function loadToolState(k){const p=perTool[k]||{};color=p.color??color;size=p.size??size;alpha=p.alpha??alpha;cap=p.cap??cap;straightToggle=!!p.straight;}
@@ -348,7 +344,6 @@ $$('.tool').forEach(btn=>{
 });
 $('#btnSidebarToggle').onclick=()=>toggleToolbar('auto');
 
-/* パネル移動 */
 (()=>{const handle=$('#panelHandle');let dragging=false,sx=0,sy=0,ox=0,oy=0,id=0;
 function down(e){ if(e.target.closest('#panelClose')) return; dragging=true; id=e.pointerId||1; try{panel.setPointerCapture(id)}catch{}; sx=e.clientX; sy=e.clientY; const r=panel.getBoundingClientRect(); ox=r.left; oy=r.top; e.preventDefault();}
 function move(e){ if(!dragging) return; const nx=ox+(e.clientX-sx),ny=oy+(e.clientY-sy); panel.style.left=Math.max(56,nx)+'px'; const top=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--topbar-h'))+6; panel.style.top=Math.max(top,ny)+'px';}
@@ -362,13 +357,17 @@ $('#panelClose').addEventListener('click',()=>{ panel.classList.remove('show'); 
 const ui={color:$('#uiColor'),size:$('#uiSize'),alpha:$('#uiAlpha'),sizeVal:$('#uiSizeVal'),alphaVal:$('#uiAlphaVal'),cap:$('#uiCap'),straight:$('#uiStraight'),gOn:$('#uiGrid'),gStep:$('#uiGridStep'),gColor:$('#uiGridColor'),palm:$('#uiPalm'),pressure:$('#uiPressure'),tilt:$('#uiTilt')};
 function pxToMm(px){return px*25.4/96}
 function syncUI(){ui.color.value=color;ui.size.value=size;ui.sizeVal.textContent=`${size}px (${pxToMm(size).toFixed(2)} mm)`;ui.alpha.value=Math.round((tool==='marker'?alpha:0.5)*100);ui.alphaVal.textContent=Math.round((tool==='marker'?alpha:0.5)*100)+'%';ui.cap.value=cap;ui.straight.checked=straightToggle;ui.gOn.checked=gridOn;ui.gStep.value=String(gridStepMM);ui.gColor.value=gridColor;ui.palm.checked=palmReject;ui.pressure.checked=pressureOn;ui.tilt.checked=tiltOn;}
-function onPanelChange(){color=ui.color.value;size=+ui.size.value;alpha=(tool==='marker')?(+ui.alpha.value/100):alpha;ui.sizeVal.textContent=`${size}px (${pxToMm(size).toFixed(2)} mm)`;ui.alphaVal.textContent=Math.round(alpha*100)+'%';cap=ui.cap.value;straightToggle=ui.straight.checked;gridOn=ui.gOn.checked;gridStepMM=+ui.gStep.value;gridColor=ui.gColor.value;drawPaper();redrawAll();}
+function onPanelChange(){color=ui.color.value;size=+ui.size.value;alpha=(tool==='marker')?(+ui.alpha.value/100):alpha;ui.sizeVal.textContent=`${size}px (${pxToMm(size).toFixed(2)} mm)`;ui.alphaVal.textContent=Math.round(alpha*100)+'%';cap=ui.cap.value;straightToggle=ui.straight.checked;gridOn=ui.gOn.checked;gridStepMM=+ui.gStep.value;gridColor=ui.gColor.value;palmReject=ui.palm.checked;drawPaper();redrawAll();}
 Object.values(ui).forEach(el=>el.addEventListener('input',onPanelChange));
 
-/* ===== drawing ===== */
+/* ===== drawing (FIX1: activeTouches管理を強化) ===== */
 function pointerToCanvas(e){ const r=cv.getBoundingClientRect(); return { x:(e.clientX - r.left)*(cv.width/r.width), y:(e.clientY - r.top)*(cv.height/r.height) }; }
 function inPaperXY(x,y){ return x>=paperRect.x && y>=paperRect.y && x<=paperRect.x+paperRect.w && y<=paperRect.y+paperRect.h; }
-let drawing=false, panning=false, start={x:0,y:0}, last={x:0,y:0}, activeTouches=0; let currentStroke=null;
+let drawing=false, panning=false, start={x:0,y:0}, last={x:0,y:0};
+let activeTouches=0;
+let activePointers=new Set();
+let currentStroke=null;
+
 function setCtx(){ ctx.lineJoin='round'; ctx.lineCap=(tool==='marker'||tool==='pen')?cap:'round';
   if(tool==='eraser'){ ctx.globalCompositeOperation='destination-out'; ctx.strokeStyle='#000'; ctx.globalAlpha=1; }
   else if(tool==='marker'){ ctx.globalCompositeOperation='source-over'; ctx.strokeStyle=color; ctx.globalAlpha=alpha; }
@@ -383,9 +382,12 @@ function toUV(x,y){ return {u:(x-paperRect.x)/paperRect.w, v:(y-paperRect.y)/pap
 function fromUV(u,v){ return {x:paperRect.x + u*paperRect.w, y:paperRect.y + v*paperRect.h}; }
 
 function onDown(e){
-  if(e.pointerType==='touch') activeTouches++;
+  if(e.pointerType==='touch'){
+    activeTouches++;
+    activePointers.add(e.pointerId);
+  }
   if(tool==='hand'){ panning=true; cv.style.cursor='grabbing'; return; }
-  if($('#uiPalm').checked && e.pointerType==='touch' && activeTouches>1){ return; }
+  if(palmReject && e.pointerType==='touch' && activeTouches>1){ return; }
   const p=pointerToCanvas(e); if(!inPaperXY(p.x,p.y)) return;
   e.preventDefault(); try{cv.setPointerCapture(e.pointerId)}catch{}
   drawing=true; start=last=p; clearGuide();
@@ -404,19 +406,34 @@ function onMove(e){
   ctx.stroke();
 }
 function onUp(e){
-  if(e.pointerType==='touch') activeTouches=Math.max(0,activeTouches-1);
-  if(tool==='hand' && panning){ panning=false; cv.style.cursor='grab'; return; }
-  if(!drawing){ clearGuide(); return; }
+  if(e.pointerType==='touch'){
+    activeTouches=Math.max(0,activeTouches-1);
+    activePointers.delete(e.pointerId);
+    if(activePointers.size===0){ activeTouches=0; }
+  }
+  if(tool==='hand' && panning){ panning=false; cv.style.cursor='grab'; try{cv.releasePointerCapture(e.pointerId)}catch{} return; }
+  if(!drawing){ clearGuide(); try{cv.releasePointerCapture(e.pointerId)}catch{} return; }
   const p=pointerToCanvas(e); const straight=(straightKey||$('#uiStraight').checked);
   if(straight){ setCtx(); ctx.beginPath(); ctx.moveTo(start.x,start.y); ctx.lineTo(p.x,p.y); ctx.stroke(); currentStroke.pts.push(toUV(p.x,p.y)); }
   drawing=false; clearGuide();
   if(currentStroke && currentStroke.pts.length>1){ Pages.cur().strokes.push(currentStroke); pushHistory(); }
   currentStroke=null;
+  try{cv.releasePointerCapture(e.pointerId)}catch{}
+}
+function onCancel(e){
+  if(e.pointerType==='touch'){
+    activeTouches=Math.max(0,activeTouches-1);
+    activePointers.delete(e.pointerId);
+    if(activePointers.size===0){ activeTouches=0; }
+  }
+  drawing=false; panning=false; clearGuide();
+  cv.style.cursor=(tool==='hand')?'grab':(tool==='keyboard')?'text':'crosshair';
+  try{cv.releasePointerCapture(e.pointerId)}catch{}
 }
 cv.addEventListener('pointerdown',onDown,{passive:false});
 cv.addEventListener('pointermove',onMove,{passive:false});
 cv.addEventListener('pointerup',onUp,{passive:false});
-cv.addEventListener('pointercancel',onUp,{passive:false});
+cv.addEventListener('pointercancel',onCancel,{passive:false});
 addEventListener('keydown',e=>{ if(e.key==='Shift') straightKey=true; });
 addEventListener('keyup',e=>{ if(e.key==='Shift') straightKey=false; });
 
@@ -449,7 +466,7 @@ $('#btnPrint').onclick=()=>window.print();
 $('#btnShare').onclick=()=>{composite().toBlob(async b=>{const f=new File([b],'note.png',{type:'image/png'});if(navigator.share&&navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:'Note Link'})}catch(e){}}else{const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download='note-link.png';a.click();setTimeout(()=>URL.revokeObjectURL(u),800)}})};
 
 let fileHandle=null;
-function exportJSON(){ flushText(); return JSON.stringify({ v:'RS6a-HF2',
+function exportJSON(){ flushText(); return JSON.stringify({ v:'v0.8S-FIX1',
   pages: Pages.list.map(pg=>({strokes:pg.strokes||[],textsHTML:pg.textsHTML||'', bg:pg.bg && pg.bg.dataURL ? {dataURL:pg.bg.dataURL}:null})),
   idx: Pages.idx, grid:{on:gridOn,stepMM:gridStepMM,color:gridColor} }); }
 async function doSave(){ const blob=new Blob([exportJSON()],{type:'application/json'});
@@ -473,7 +490,6 @@ async function doLoad(){ try{
   }catch(e){} }
 $('#btnSave').onclick=doSave; $('#btnLoad').onclick=doLoad;
 
-/* ===== image background ===== */
 async function pickImage(){
   try{
     if('showOpenFilePicker' in window){
@@ -502,18 +518,16 @@ async function setBackground(){ const file=await pickImage(); if(!file) return;
 document.getElementById('btnSetBg').onclick=()=>setBackground();
 document.getElementById('btnSetBg_m').onclick=()=>setBackground();
 
-/* ===== undo/redo ===== */
 const hist=[], redoStack=[];
 function snapshot(){ flushText(); return {pages:JSON.parse(JSON.stringify(Pages.list.map(p=>({strokes:p.strokes,textsHTML:p.textsHTML,bg:p.bg?{dataURL:p.bg.dataURL}:null})))), idx:Pages.idx, grid:{on:gridOn,stepMM:gridStepMM,color:gridColor}}; }
 function pushHistory(){ hist.push(snapshot()); if(hist.length>40) hist.shift(); redoStack.length=0; updatePageIndicator(); }
 function restoreSnap(s){
-  Pages.list=s.pages.map(pg=>{ const entry={strokes:pg.strokes||[],textsHTML:pg.textsHTML||'',bg:null}; if(pg.bg&&pg.dataURL){ const img=new Image(); img.src=pg.dataURL; entry.bg={dataURL:pg.dataURL,img}; } return entry; });
+  Pages.list=s.pages.map(pg=>{ const entry={strokes:pg.strokes||[],textsHTML:pg.textsHTML||'',bg:null}; if(pg.bg&&pg.bg.dataURL){ const img=new Image(); img.src=pg.bg.dataURL; entry.bg={dataURL:pg.bg.dataURL,img}; } return entry; });
   Pages.idx=Math.max(0,Math.min(Pages.list.length-1,s.idx||0)); textLayer.innerHTML=Pages.cur().textsHTML||''; updatePageIndicator(); drawPaper(); redrawAll();
 }
 $('#btnUndo').onclick=()=>{ if(!hist.length) return; const cur=snapshot(); const prev=hist.pop(); redoStack.push(cur); restoreSnap(prev); };
 $('#btnRedo').onclick=()=>{ const nxt=redoStack.pop(); if(!nxt) return; hist.push(snapshot()); restoreSnap(nxt); };
 
-/* ===== Header rail: wheel/drag scroll + フェード制御 ===== */
 const rail = document.getElementById('railScroll');
 const railWrap = document.getElementById('railWrap');
 function updateRailOverflow(){
@@ -557,7 +571,6 @@ rail.addEventListener('click',(e)=>{
   if(railJustDragged){ e.stopPropagation(); e.preventDefault(); railJustDragged=false; }
 }, true);
 
-/* ===== Collapsible toolbar + movable handle（右ドック対応） ===== */
 const bodyEl=document.body, tbHandle=document.getElementById('tbHandle');
 function isCollapsed(){ return bodyEl.classList.contains('tb-collapsed'); }
 function isRightDock(){ return bodyEl.classList.contains('tb-right'); }
@@ -569,9 +582,8 @@ function savedHandleX(side){ try{ const k='tbHandleX_'+(side|| (isRightDock()?'R
 function saveHandleX(px){ try{ const k='tbHandleX_'+(isRightDock()?'R':'L'); localStorage.setItem(k, String(px)); }catch{} }
 function setDock(side){ if(side==='right'){ bodyEl.classList.add('tb-right'); document.documentElement.style.setProperty('--toolbar-left','0px'); document.documentElement.style.setProperty('--toolbar-right','56px'); }
   else { bodyEl.classList.remove('tb-right'); document.documentElement.style.setProperty('--toolbar-left','56px'); document.documentElement.style.setProperty('--toolbar-right','0px'); } }
-function handleCenterX(){ const x=parseInt(tbHandle.style.left||'8',10)||8; return x+18; } /* 36px幅の中心 */
+function handleCenterX(){ const x=parseInt(tbHandle.style.left||'8',10)||8; return x+18; }
 
-/* ★ 改良アンカー：viewportスクリーン座標を含めて保持 */
 function toggleToolbar(mode='auto'){
   const vRect0 = viewport.getBoundingClientRect();
   const anchorXscreen = vRect0.left + (paperRect.x + paperRect.w/2)*zoom + panX;
@@ -628,7 +640,6 @@ tbHandle.addEventListener('pointerup', endHandle, {passive:false});
 tbHandle.addEventListener('pointercancel', endHandle, {passive:false});
 function clampHandle(){ const side=isRightDock()?'R':'L'; const x=parseInt(tbHandle.style.left||savedHandleX(side),10)||8; applyHandleX(x); }
 
-/* ===== zoom buttons ===== */
 function setZoom(z){ const z0=zoom, z1=Math.max(0.6,Math.min(3,z));
   const vrW=viewport.clientWidth, vrH=viewport.clientHeight; const Cx=vrW/2, Cy=vrH/2;
   const Ux=(Cx - panX)/z0, Uy=(Cy - panY)/z0; zoom=z1; panX = Cx - Ux*z1; panY = Cy - Uy*z1; updateViewportTransform();
@@ -637,7 +648,6 @@ $('#btnZoomIn').addEventListener('click', ()=>setZoom(zoom+0.1));
 $('#btnZoomOut').addEventListener('click', ()=>setZoom(zoom-0.1));
 $('#btnZoomReset').addEventListener('click', ()=>setZoom(1));
 
-/* ===== boot ===== */
 function boot(){
   const leftSaved = localStorage.getItem('tbHandleX_L');
   const rightSaved = localStorage.getItem('tbHandleX_R');
@@ -653,3 +663,4 @@ boot();
 </script>
 </body>
 </html>
+
