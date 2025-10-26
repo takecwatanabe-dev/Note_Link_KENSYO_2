@@ -2,8 +2,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>NOTE LINK — v0.8S-FIX20</title>
-<!-- FIX20: paperRectサイズ保存（UV座標の正確な復元） -->
+<title>NOTE LINK — v0.8S-FIX21</title>
+<!-- FIX21: UV座標をA4固定サイズ基準に変更（根本原因の修正） -->
 <style>
 :root{
   --ink:#e6f1ff;--ink-dim:#9bd6e9;--bg:#0b1020;--panel:#101827;--accent:#3f78ff;
@@ -128,7 +128,7 @@ body.tb-collapsed .tb-handle{ display:grid }
 </head>
 <body>
 <header class="topbar" id="topbar">
-  <div class="brand"><strong id="verText">NOTE LINK — v0.8S-FIX20</strong></div>
+  <div class="brand"><strong id="verText">NOTE LINK — v0.8S-FIX21</strong></div>
 
   <div class="rail-wrap" id="railWrap">
     <div class="rail-scroll" id="railScroll">
@@ -256,7 +256,7 @@ const cvPaper=$('#paper'), gPaper=cvPaper.getContext('2d');
 const cvGuide=$('#guide'), gGuide=cvGuide.getContext('2d');
 const cv=$('#paint'), ctx=cv.getContext('2d',{alpha:true});
 const textLayer=$('#textLayer');
-$('#verText').textContent='NOTE LINK — v0.8S-FIX20';
+$('#verText').textContent='NOTE LINK — v0.8S-FIX21';
 
 // デバッグ情報更新関数
 function updateDebugInfo(){
@@ -320,7 +320,11 @@ applyBars();
 
 /* ===== paper & grid ===== */
 function mm2csspx(mm){return mm*96/25.4}
-const A4={wmm:210,hmm:297}; let paperRect={x:0,y:0,w:0,h:0};
+const A4={wmm:210,hmm:297}; 
+// A4の固定基準サイズ（UV座標計算用）
+const A4_BASE_W = mm2csspx(210);  // 約793px
+const A4_BASE_H = mm2csspx(297);  // 約1122px
+let paperRect={x:0,y:0,w:0,h:0};
 function isTouchDevice(){ return (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || (navigator.maxTouchPoints>0); }
 function layoutPaper(){
   const a4w=mm2csspx(A4.wmm), a4h=mm2csspx(A4.hmm);
@@ -462,8 +466,9 @@ function showGuide(sx,sy,ex,ey){ gGuide.clearRect(0,0,cvGuide.width,cvGuide.heig
   gGuide.save(); gGuide.setLineDash([6*DPR,6*DPR]); gGuide.lineWidth=Math.max(1,Math.round(size*DPR));
   gGuide.lineCap=cap; gGuide.strokeStyle='#7ec8ff'; gGuide.beginPath(); gGuide.moveTo(sx,sy); gGuide.lineTo(ex,ey); gGuide.stroke(); gGuide.restore(); }
 function clearGuide(){ gGuide.clearRect(0,0,cvGuide.width,cvGuide.height); }
-function toUV(x,y){ return {u:(x-paperRect.x)/paperRect.w, v:(y-paperRect.y)/paperRect.h}; }
-function fromUV(u,v){ return {x:paperRect.x + u*paperRect.w, y:paperRect.y + v*paperRect.h}; }
+// UV座標：A4の固定サイズを基準に正規化（画面サイズに依存しない）
+function toUV(x,y){ return {u:(x-paperRect.x)/A4_BASE_W, v:(y-paperRect.y)/A4_BASE_H}; }
+function fromUV(u,v){ return {x:paperRect.x + u*A4_BASE_W, y:paperRect.y + v*A4_BASE_H}; }
 
 function onDown(e){
   if(tool==='hand'){ panning=true; cv.style.cursor='grabbing'; return; }
@@ -491,8 +496,9 @@ function onDown(e){
   drawingPointerId=e.pointerId; 
   start=last=p; 
   clearGuide();
+  // sizeUもA4固定サイズ基準に変更
   currentStroke={tool:(tool==='marker'?'marker':tool==='eraser'?'eraser':'pen'),
-    color:(tool==='marker'||tool==='pen')?color:'#000000', alpha:(tool==='marker')?alpha:1, cap:cap, sizeU:(size/paperRect.h), pts:[toUV(p.x,p.y)]};
+    color:(tool==='marker'||tool==='pen')?color:'#000000', alpha:(tool==='marker')?alpha:1, cap:cap, sizeU:(size/A4_BASE_H), pts:[toUV(p.x,p.y)]};
   
   // ストロークを即座にPages.cur().strokesに追加（スワイプ対策）
   Pages.cur().strokes.push(currentStroke);
@@ -569,7 +575,8 @@ function redrawAll(){
   ctx.clearRect(0,0,cv.width,cv.height);
   ctx.save(); ctx.beginPath(); ctx.rect(paperRect.x,paperRect.y,paperRect.w,paperRect.h); ctx.clip();
   for(const st of Pages.cur().strokes){
-    const w=st.sizeU*paperRect.h; ctx.lineJoin='round'; ctx.lineCap=st.cap||'round';
+    // 線の太さもA4固定サイズ基準に変更
+    const w=st.sizeU*A4_BASE_H; ctx.lineJoin='round'; ctx.lineCap=st.cap||'round';
     ctx.globalCompositeOperation=(st.tool==='eraser')?'destination-out':'source-over';
     ctx.globalAlpha=(st.tool==='marker')?(st.alpha??0.5):1.0;
     ctx.strokeStyle=(st.tool==='pen'||st.tool==='marker')?(st.color||'#000'):'#000';
@@ -596,7 +603,7 @@ $('#btnPrint').onclick=()=>window.print();
 $('#btnShare').onclick=()=>{composite().toBlob(async b=>{const f=new File([b],'note.png',{type:'image/png'});if(navigator.share&&navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:'Note Link'})}catch(e){}}else{const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download='note-link.png';a.click();setTimeout(()=>URL.revokeObjectURL(u),800)}})};
 
 let fileHandle=null;
-function exportJSON(){ flushText(); return JSON.stringify({ v:'v0.8S-FIX20',
+function exportJSON(){ flushText(); return JSON.stringify({ v:'v0.8S-FIX21',
   pages: Pages.list.map(pg=>({strokes:pg.strokes||[],textsHTML:pg.textsHTML||'', bg:pg.bg && pg.bg.dataURL ? {dataURL:pg.bg.dataURL}:null})),
   idx: Pages.idx, grid:{on:gridOn,stepMM:gridStepMM,color:gridColor} }); }
 async function doSave(){ const blob=new Blob([exportJSON()],{type:'application/json'});
