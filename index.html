@@ -2,8 +2,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>NOTE LINK — v0.8S-FIX2</title>
-<!-- FIX2: ポインターキャプチャ削除、イベント処理シンプル化 -->
+<title>NOTE LINK — v0.8S-FIX3</title>
+<!-- FIX3: イベント処理完全書き直し、状態管理強化 -->
 <style>
 :root{
   --ink:#e6f1ff;--ink-dim:#9bd6e9;--bg:#0b1020;--panel:#101827;--accent:#3f78ff;
@@ -121,7 +121,7 @@ body.tb-collapsed .tb-handle{ display:grid }
 </head>
 <body>
 <header class="topbar" id="topbar">
-  <div class="brand"><strong id="verText">NOTE LINK — v0.8S-FIX2</strong></div>
+  <div class="brand"><strong id="verText">NOTE LINK — v0.8S-FIX3</strong></div>
 
   <div class="rail-wrap" id="railWrap">
     <div class="rail-scroll" id="railScroll">
@@ -241,7 +241,7 @@ const cvPaper=$('#paper'), gPaper=cvPaper.getContext('2d');
 const cvGuide=$('#guide'), gGuide=cvGuide.getContext('2d');
 const cv=$('#paint'), ctx=cv.getContext('2d',{alpha:true});
 const textLayer=$('#textLayer');
-$('#verText').textContent='NOTE LINK — v0.8S-FIX2';
+$('#verText').textContent='NOTE LINK — v0.8S-FIX3';
 
 /* ===== layout & zoom ===== */
 let zoom=1, panX=0, panY=0, W=0, H=0;
@@ -360,17 +360,33 @@ function syncUI(){ui.color.value=color;ui.size.value=size;ui.sizeVal.textContent
 function onPanelChange(){color=ui.color.value;size=+ui.size.value;alpha=(tool==='marker')?(+ui.alpha.value/100):alpha;ui.sizeVal.textContent=`${size}px (${pxToMm(size).toFixed(2)} mm)`;ui.alphaVal.textContent=Math.round(alpha*100)+'%';cap=ui.cap.value;straightToggle=ui.straight.checked;gridOn=ui.gOn.checked;gridStepMM=+ui.gStep.value;gridColor=ui.gColor.value;palmReject=ui.palm.checked;drawPaper();redrawAll();}
 Object.values(ui).forEach(el=>el.addEventListener('input',onPanelChange));
 
-/* ===== drawing (FIX2: ポインターキャプチャ削除) ===== */
+/* ===== drawing (FIX3: 完全な状態管理) ===== */
+const DrawState = {
+  active: false,
+  panning: false,
+  pointerId: null,
+  start: {x:0, y:0},
+  last: {x:0, y:0},
+  stroke: null,
+  
+  reset() {
+    this.active = false;
+    this.panning = false;
+    this.pointerId = null;
+    this.start = {x:0, y:0};
+    this.last = {x:0, y:0};
+    this.stroke = null;
+    clearGuide();
+    cv.style.cursor = (tool==='hand') ? 'grab' : (tool==='keyboard') ? 'text' : 'crosshair';
+  },
+  
+  isDrawing(pid) {
+    return this.active && this.pointerId === pid;
+  }
+};
+
 function pointerToCanvas(e){ const r=cv.getBoundingClientRect(); return { x:(e.clientX - r.left)*(cv.width/r.width), y:(e.clientY - r.top)*(cv.height/r.height) }; }
 function inPaperXY(x,y){ return x>=paperRect.x && y>=paperRect.y && x<=paperRect.x+paperRect.w && y<=paperRect.y+paperRect.h; }
-let drawing=false, panning=false, start={x:0,y:0}, last={x:0,y:0};
-let currentStroke=null;
-let drawingPointerId=null;
-
-function resetDrawing(){
-  drawing=false; panning=false; drawingPointerId=null; currentStroke=null;
-  clearGuide(); cv.style.cursor=(tool==='hand')?'grab':(tool==='keyboard')?'text':'crosshair';
-}
 
 function setCtx(){ ctx.lineJoin='round'; ctx.lineCap=(tool==='marker'||tool==='pen')?cap:'round';
   if(tool==='eraser'){ ctx.globalCompositeOperation='destination-out'; ctx.strokeStyle='#000'; ctx.globalAlpha=1; }
@@ -386,41 +402,115 @@ function toUV(x,y){ return {u:(x-paperRect.x)/paperRect.w, v:(y-paperRect.y)/pap
 function fromUV(u,v){ return {x:paperRect.x + u*paperRect.w, y:paperRect.y + v*paperRect.h}; }
 
 function onDown(e){
-  if(drawing && e.pointerId !== drawingPointerId) return;
-  if(tool==='hand'){ panning=true; cv.style.cursor='grabbing'; return; }
-  const p=pointerToCanvas(e); if(!inPaperXY(p.x,p.y)) return;
+  // 既に描画中なら無視
+  if(DrawState.active && e.pointerId !== DrawState.pointerId) {
+    return;
+  }
+  
+  if(tool==='hand'){ 
+    DrawState.panning=true; 
+    cv.style.cursor='grabbing'; 
+    return; 
+  }
+  
+  const p=pointerToCanvas(e); 
+  if(!inPaperXY(p.x,p.y)) return;
+  
   e.preventDefault();
-  drawing=true; drawingPointerId=e.pointerId; start=last=p; clearGuide();
-  currentStroke={tool:(tool==='marker'?'marker':tool==='eraser'?'eraser':'pen'),
-    color:(tool==='marker'||tool==='pen')?color:'#000000', alpha:(tool==='marker')?alpha:1, cap:cap, sizeU:(size/paperRect.h), pts:[toUV(p.x,p.y)]};
+  e.stopPropagation();
+  
+  DrawState.active = true;
+  DrawState.pointerId = e.pointerId;
+  DrawState.start = DrawState.last = p;
+  clearGuide();
+  
+  DrawState.stroke = {
+    tool: (tool==='marker' ? 'marker' : tool==='eraser' ? 'eraser' : 'pen'),
+    color: (tool==='marker'||tool==='pen') ? color : '#000000',
+    alpha: (tool==='marker') ? alpha : 1,
+    cap: cap,
+    sizeU: (size/paperRect.h),
+    pts: [toUV(p.x, p.y)]
+  };
 }
+
 function onMove(e){
-  if(tool==='hand' && panning){ panX+=e.movementX||0; panY+=e.movementY||0; updateViewportTransform(); return; }
-  if(!drawing || e.pointerId !== drawingPointerId) return;
-  const p=pointerToCanvas(e);
-  const straight=(straightKey||$('#uiStraight').checked);
-  if(straight){ showGuide(start.x,start.y,p.x,p.y); return; }
-  const evs=(e.getCoalescedEvents&&e.getCoalescedEvents())||[e];
-  setCtx(); ctx.beginPath(); ctx.moveTo(last.x,last.y);
-  for(const ev of evs){ const q=pointerToCanvas(ev); if(!inPaperXY(q.x,q.y)) continue; ctx.lineTo(q.x,q.y); currentStroke.pts.push(toUV(q.x,q.y)); last=q; }
+  if(tool==='hand' && DrawState.panning){ 
+    panX += e.movementX||0; 
+    panY += e.movementY||0; 
+    updateViewportTransform(); 
+    return; 
+  }
+  
+  if(!DrawState.isDrawing(e.pointerId)) return;
+  
+  const p = pointerToCanvas(e);
+  const straight = (straightKey || $('#uiStraight').checked);
+  
+  if(straight){ 
+    showGuide(DrawState.start.x, DrawState.start.y, p.x, p.y); 
+    return; 
+  }
+  
+  const evs = (e.getCoalescedEvents && e.getCoalescedEvents()) || [e];
+  setCtx(); 
+  ctx.beginPath(); 
+  ctx.moveTo(DrawState.last.x, DrawState.last.y);
+  
+  for(const ev of evs){ 
+    const q = pointerToCanvas(ev); 
+    if(!inPaperXY(q.x, q.y)) continue; 
+    ctx.lineTo(q.x, q.y); 
+    DrawState.stroke.pts.push(toUV(q.x, q.y)); 
+    DrawState.last = q; 
+  }
   ctx.stroke();
 }
+
 function onUp(e){
-  if(tool==='hand' && panning){ panning=false; cv.style.cursor='grab'; return; }
-  if(!drawing || e.pointerId !== drawingPointerId){ return; }
-  const p=pointerToCanvas(e); const straight=(straightKey||$('#uiStraight').checked);
-  if(straight){ setCtx(); ctx.beginPath(); ctx.moveTo(start.x,start.y); ctx.lineTo(p.x,p.y); ctx.stroke(); currentStroke.pts.push(toUV(p.x,p.y)); }
-  if(currentStroke && currentStroke.pts.length>1){ Pages.cur().strokes.push(currentStroke); pushHistory(); }
-  resetDrawing();
+  if(tool==='hand' && DrawState.panning){ 
+    DrawState.panning = false; 
+    cv.style.cursor='grab'; 
+    return; 
+  }
+  
+  if(!DrawState.isDrawing(e.pointerId)) return;
+  
+  const p = pointerToCanvas(e);
+  const straight = (straightKey || $('#uiStraight').checked);
+  
+  if(straight){ 
+    setCtx(); 
+    ctx.beginPath(); 
+    ctx.moveTo(DrawState.start.x, DrawState.start.y); 
+    ctx.lineTo(p.x, p.y); 
+    ctx.stroke(); 
+    DrawState.stroke.pts.push(toUV(p.x, p.y)); 
+  }
+  
+  if(DrawState.stroke && DrawState.stroke.pts.length > 1){ 
+    Pages.cur().strokes.push(DrawState.stroke); 
+    pushHistory(); 
+  }
+  
+  DrawState.reset();
 }
+
 function onCancel(e){
-  if(e.pointerId !== drawingPointerId && drawingPointerId !== null) return;
-  resetDrawing();
+  if(!DrawState.isDrawing(e.pointerId)) return;
+  DrawState.reset();
 }
-cv.addEventListener('pointerdown',onDown,{passive:false});
-cv.addEventListener('pointermove',onMove,{passive:false});
-cv.addEventListener('pointerup',onUp,{passive:false});
-cv.addEventListener('pointercancel',onCancel,{passive:false});
+
+cv.addEventListener('pointerdown', onDown, {passive:false});
+cv.addEventListener('pointermove', onMove, {passive:false});
+cv.addEventListener('pointerup', onUp, {passive:false});
+cv.addEventListener('pointercancel', onCancel, {passive:false});
+
+// タッチイベントのpreventDefault強化
+cv.addEventListener('touchstart', e => e.preventDefault(), {passive:false});
+cv.addEventListener('touchmove', e => e.preventDefault(), {passive:false});
+cv.addEventListener('touchend', e => e.preventDefault(), {passive:false});
+
 addEventListener('keydown',e=>{ if(e.key==='Shift') straightKey=true; });
 addEventListener('keyup',e=>{ if(e.key==='Shift') straightKey=false; });
 
@@ -453,7 +543,7 @@ $('#btnPrint').onclick=()=>window.print();
 $('#btnShare').onclick=()=>{composite().toBlob(async b=>{const f=new File([b],'note.png',{type:'image/png'});if(navigator.share&&navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:'Note Link'})}catch(e){}}else{const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download='note-link.png';a.click();setTimeout(()=>URL.revokeObjectURL(u),800)}})};
 
 let fileHandle=null;
-function exportJSON(){ flushText(); return JSON.stringify({ v:'v0.8S-FIX2',
+function exportJSON(){ flushText(); return JSON.stringify({ v:'v0.8S-FIX3',
   pages: Pages.list.map(pg=>({strokes:pg.strokes||[],textsHTML:pg.textsHTML||'', bg:pg.bg && pg.bg.dataURL ? {dataURL:pg.bg.dataURL}:null})),
   idx: Pages.idx, grid:{on:gridOn,stepMM:gridStepMM,color:gridColor} }); }
 async function doSave(){ const blob=new Blob([exportJSON()],{type:'application/json'});
