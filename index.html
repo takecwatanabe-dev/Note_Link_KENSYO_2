@@ -2,8 +2,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>NOTE LINK — v0.8S-FIX19</title>
-<!-- FIX19: mm単位スケール追加（A4実寸で消えるエリアを特定） -->
+<title>NOTE LINK — v0.8S-FIX20</title>
+<!-- FIX20: paperRectサイズ保存（UV座標の正確な復元） -->
 <style>
 :root{
   --ink:#e6f1ff;--ink-dim:#9bd6e9;--bg:#0b1020;--panel:#101827;--accent:#3f78ff;
@@ -128,7 +128,7 @@ body.tb-collapsed .tb-handle{ display:grid }
 </head>
 <body>
 <header class="topbar" id="topbar">
-  <div class="brand"><strong id="verText">NOTE LINK — v0.8S-FIX19</strong></div>
+  <div class="brand"><strong id="verText">NOTE LINK — v0.8S-FIX20</strong></div>
 
   <div class="rail-wrap" id="railWrap">
     <div class="rail-scroll" id="railScroll">
@@ -256,7 +256,7 @@ const cvPaper=$('#paper'), gPaper=cvPaper.getContext('2d');
 const cvGuide=$('#guide'), gGuide=cvGuide.getContext('2d');
 const cv=$('#paint'), ctx=cv.getContext('2d',{alpha:true});
 const textLayer=$('#textLayer');
-$('#verText').textContent='NOTE LINK — v0.8S-FIX19';
+$('#verText').textContent='NOTE LINK — v0.8S-FIX20';
 
 // デバッグ情報更新関数
 function updateDebugInfo(){
@@ -596,7 +596,7 @@ $('#btnPrint').onclick=()=>window.print();
 $('#btnShare').onclick=()=>{composite().toBlob(async b=>{const f=new File([b],'note.png',{type:'image/png'});if(navigator.share&&navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:'Note Link'})}catch(e){}}else{const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download='note-link.png';a.click();setTimeout(()=>URL.revokeObjectURL(u),800)}})};
 
 let fileHandle=null;
-function exportJSON(){ flushText(); return JSON.stringify({ v:'v0.8S-FIX19',
+function exportJSON(){ flushText(); return JSON.stringify({ v:'v0.8S-FIX20',
   pages: Pages.list.map(pg=>({strokes:pg.strokes||[],textsHTML:pg.textsHTML||'', bg:pg.bg && pg.bg.dataURL ? {dataURL:pg.bg.dataURL}:null})),
   idx: Pages.idx, grid:{on:gridOn,stepMM:gridStepMM,color:gridColor} }); }
 async function doSave(){ const blob=new Blob([exportJSON()],{type:'application/json'});
@@ -861,7 +861,7 @@ function boot(){
 }
 boot();
 
-/* ===== スワイプ時の自動保存（FIX12: 強化版） ===== */
+/* ===== スワイプ時の自動保存＆再描画（FIX20: 強化版） ===== */
 // ページ離脱前に保存
 addEventListener('beforeunload', (e) => {
   saveToLocalStorage(); // 常に保存
@@ -871,6 +871,19 @@ addEventListener('beforeunload', (e) => {
 addEventListener('visibilitychange', () => {
   if(document.hidden){
     saveToLocalStorage(); // 常に保存
+  } else {
+    // ページが再表示されたとき、paperRectを再計算して再描画
+    setTimeout(() => {
+      console.log('visibilitychange: 再計算開始');
+      updateViewportTransform();
+      fitCanvases();
+      setTimeout(() => {
+        layoutPaper(); // paperRectを再計算
+        drawPaper();
+        redrawAll();
+        console.log('visibilitychange: 再描画完了 paperRect=', paperRect);
+      }, 50);
+    }, 100);
   }
 });
 
