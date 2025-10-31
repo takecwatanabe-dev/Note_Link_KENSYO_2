@@ -191,6 +191,9 @@ body.tb-collapsed .tb-handle{ display:grid }
     <button class="tool" data-tool="settings" title="ツール設定（表示/非表示）">
       <svg viewBox="0 0 24 24"><path d="M12 7.5a4.5 4.5 0 1 1 0 9 4.5 0 0 1 0-9zM4 13h2l1 2-1 2H4l-1-2 1-2zm14 0h2l1 2-1 2h-2l-1-2 1-2zM8 4h2l2 1 2-1h2l1 2-1 2h-2l-2-1-2 1H8L7 6l1-2z"/></svg>
     </button>
+    <button class="tool" data-tool="speech" title="音声読み上げ">
+      <svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><path d="M12 18v4"></path><path d="M8 22h8"></path></svg>
+    </button>
   </div>
 </aside>
 
@@ -227,6 +230,11 @@ body.tb-collapsed .tb-handle{ display:grid }
     <button id="btnTextIt">斜体</button>
     <button id="btnTextDel">選択削</button>
     <button id="btnTextBoxDel">枠削</button>
+  </div>
+  <div class="row" id="rowSpeechOps" style="display:none;gap:6px">
+    <label>音声読み上げ</label>
+    <button class="btn" id="btnSpeechStart">読み上げ開始</button>
+    <button class="btn" id="btnSpeechStop">停止</button>
   </div>
 </div>
 
@@ -391,6 +399,7 @@ function setActiveTool(t){
   $('#rowTextOps').style.display=(t==='keyboard')?'':'none';
   $('#rowSize').style.display=(t==='pen'||t==='marker'||t==='eraser')?'':'none';
   $('#rowPenExt').style.display=(t==='pen'||t==='marker')?'':'none';
+  $('#rowSpeechOps').style.display=(t==='speech')?'':'none';
   syncUI(); cv.style.cursor=(t==='hand')?'grab':(t==='keyboard')?'text':'crosshair';
 }
 $$('.tool').forEach(btn=>{
@@ -401,6 +410,11 @@ $$('.tool').forEach(btn=>{
       const willShow=!panel.classList.contains('show');
       panel.classList.toggle('show', willShow);
       btn.classList.toggle('active', willShow);
+      return;
+    }
+    if(t==='speech'){
+      setActiveTool(t);
+      panel.classList.add('show');
       return;
     }
     setActiveTool(t);
@@ -867,6 +881,102 @@ function boot(){
   }, 300);
 }
 boot();
+
+/* ===== 音声読み上げ機能 ===== */
+let speechSynthesis = window.speechSynthesis;
+let isSpeaking = false;
+let currentUtterance = null;
+
+function speakText(text) {
+  if (!text || text.trim() === '') {
+    alert('読み上げるテキストがありません');
+    return;
+  }
+  
+  // 既に読み上げ中の場合は停止
+  if (isSpeaking) {
+    stopSpeech();
+  }
+  
+  // テキストからHTMLタグを削除
+  const cleanText = text.replace(/<[^>]*>/g, '').trim();
+  
+  if (cleanText === '') {
+    alert('読み上げるテキストがありません');
+    return;
+  }
+  
+  currentUtterance = new SpeechSynthesisUtterance(cleanText);
+  currentUtterance.lang = 'ja-JP';
+  currentUtterance.rate = 1.0;
+  currentUtterance.pitch = 1.0;
+  currentUtterance.volume = 1.0;
+  
+  currentUtterance.onstart = () => {
+    isSpeaking = true;
+    $('#btnSpeechStart').textContent = '読み上げ中...';
+    $('#btnSpeechStart').disabled = true;
+  };
+  
+  currentUtterance.onend = () => {
+    isSpeaking = false;
+    $('#btnSpeechStart').textContent = '読み上げ開始';
+    $('#btnSpeechStart').disabled = false;
+    currentUtterance = null;
+  };
+  
+  currentUtterance.onerror = (e) => {
+    console.error('音声読み上げエラー:', e);
+    isSpeaking = false;
+    $('#btnSpeechStart').textContent = '読み上げ開始';
+    $('#btnSpeechStart').disabled = false;
+    currentUtterance = null;
+    alert('音声読み上げでエラーが発生しました');
+  };
+  
+  speechSynthesis.speak(currentUtterance);
+}
+
+function stopSpeech() {
+  if (speechSynthesis.speaking) {
+    speechSynthesis.cancel();
+  }
+  isSpeaking = false;
+  currentUtterance = null;
+  $('#btnSpeechStart').textContent = '読み上げ開始';
+  $('#btnSpeechStart').disabled = false;
+}
+
+// テキストレイヤーから全てのテキストを取得
+function getAllText() {
+  const textElements = textLayer.querySelectorAll('.note-text');
+  let allText = '';
+  textElements.forEach(el => {
+    const text = el.textContent || el.innerText;
+    if (text && text.trim() !== '' && !text.includes('削除')) {
+      allText += text.trim() + '。\n';
+    }
+  });
+  return allText.trim();
+}
+
+$('#btnSpeechStart').onclick = () => {
+  const text = getAllText();
+  if (text) {
+    speakText(text);
+  } else {
+    alert('読み上げるテキストがありません。テキストツールでテキストを追加してください。');
+  }
+};
+
+$('#btnSpeechStop').onclick = () => {
+  stopSpeech();
+};
+
+// ページ離脱時に読み上げを停止
+addEventListener('beforeunload', () => {
+  stopSpeech();
+});
 
 /* ===== スワイプ時の自動保存＆再描画（FIX20: 強化版） ===== */
 // ページ離脱前に保存
