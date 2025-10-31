@@ -143,6 +143,8 @@ body.tb-collapsed .tb-handle{ display:grid }
       <button class="btn" id="btnPrint">印刷</button>
       <button class="btn" id="btnPng">PNG</button>
       <button class="btn" id="btnShare">共有</button>
+      <button class="btn" id="btnSpeech">🎤 音声</button>
+      <button class="btn" id="btnRead">🔊 読み上げ</button>
       <span id="pageIndicator">1/1</span>
     </div>
     <div id="railHint" class="rail-hint" aria-hidden="true">⇠ スライド ⇢</div>
@@ -601,6 +603,180 @@ function composite(){ const out=document.createElement('canvas'); out.width=cv.w
 $('#btnPng').onclick=()=>composite().toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='note-link.png';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),800)});
 $('#btnPrint').onclick=()=>window.print();
 $('#btnShare').onclick=()=>{composite().toBlob(async b=>{const f=new File([b],'note.png',{type:'image/png'});if(navigator.share&&navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:'Note Link'})}catch(e){}}else{const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download='note-link.png';a.click();setTimeout(()=>URL.revokeObjectURL(u),800)}})};
+
+/* ===== 音声機能 ===== */
+let recognition = null;
+let isListening = false;
+let speechSynthesis = window.speechSynthesis;
+
+// 音声認識の初期化
+function initSpeechRecognition() {
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    return false;
+  }
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SpeechRecognition();
+  recognition.lang = 'ja-JP';
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  
+  recognition.onresult = (e) => {
+    const transcript = e.results[0][0].transcript;
+    if (transcript.trim()) {
+      // テキストツールがアクティブな場合はテキストを追加
+      if (tool === 'keyboard') {
+        addTextFromSpeech(transcript);
+      } else {
+        // それ以外の場合はテキストツールに切り替えて追加
+        setActiveTool('keyboard');
+        setTimeout(() => addTextFromSpeech(transcript), 100);
+      }
+    }
+    isListening = false;
+    updateSpeechButton();
+  };
+  
+  recognition.onerror = (e) => {
+    console.error('音声認識エラー:', e.error);
+    isListening = false;
+    updateSpeechButton();
+    if (e.error === 'no-speech') {
+      alert('音声が検出されませんでした。もう一度お試しください。');
+    }
+  };
+  
+  recognition.onend = () => {
+    isListening = false;
+    updateSpeechButton();
+  };
+  
+  return true;
+}
+
+// 音声認識開始/停止
+function toggleSpeechRecognition() {
+  if (!recognition) {
+    if (!initSpeechRecognition()) {
+      alert('お使いのブラウザは音声認識に対応していません。');
+      return;
+    }
+  }
+  
+  if (isListening) {
+    recognition.stop();
+    isListening = false;
+  } else {
+    try {
+      recognition.start();
+      isListening = true;
+    } catch (e) {
+      console.error('音声認識開始エラー:', e);
+      isListening = false;
+    }
+  }
+  updateSpeechButton();
+}
+
+// 音声認識ボタンの状態更新
+function updateSpeechButton() {
+  const btn = $('#btnSpeech');
+  if (btn) {
+    btn.textContent = isListening ? '⏹ 停止' : '🎤 音声';
+    btn.style.background = isListening ? '#ff4444' : '';
+  }
+}
+
+// 音声からテキストを追加
+function addTextFromSpeech(text) {
+  flushText();
+  const textEl = document.createElement('div');
+  textEl.className = 'note-text';
+  textEl.contentEditable = 'true';
+  textEl.textContent = text;
+  
+  // 用紙の中央付近に配置
+  const centerX = paperRect.x + paperRect.w / 2;
+  const centerY = paperRect.y + paperRect.h / 2;
+  textEl.style.left = centerX + 'px';
+  textEl.style.top = centerY + 'px';
+  
+  textLayer.appendChild(textEl);
+  textEl.focus();
+  
+  // テキスト削除ボタン
+  const delBtn = document.createElement('span');
+  delBtn.className = 'del';
+  delBtn.textContent = '削除';
+  delBtn.onclick = (e) => {
+    e.stopPropagation();
+    textEl.remove();
+    flushText();
+    pushHistory();
+  };
+  textEl.appendChild(delBtn);
+  
+  flushText();
+  pushHistory();
+}
+
+// テキスト読み上げ
+function readText() {
+  if (!speechSynthesis) {
+    alert('お使いのブラウザはテキスト読み上げに対応していません。');
+    return;
+  }
+  
+  // 既に読み上げ中の場合は停止
+  if (speechSynthesis.speaking) {
+    speechSynthesis.cancel();
+    $('#btnRead').textContent = '🔊 読み上げ';
+    return;
+  }
+  
+  // すべてのテキスト要素を取得
+  const textElements = textLayer.querySelectorAll('.note-text');
+  let allText = '';
+  
+  textElements.forEach(el => {
+    const text = el.textContent.replace(/削除$/, '').trim();
+    if (text) {
+      allText += text + '。';
+    }
+  });
+  
+  if (!allText.trim()) {
+    alert('読み上げるテキストがありません。');
+    return;
+  }
+  
+  const utterance = new SpeechSynthesisUtterance(allText);
+  utterance.lang = 'ja-JP';
+  utterance.rate = 1.0;
+  utterance.pitch = 1.0;
+  utterance.volume = 1.0;
+  
+  utterance.onstart = () => {
+    $('#btnRead').textContent = '⏹ 停止';
+  };
+  
+  utterance.onend = () => {
+    $('#btnRead').textContent = '🔊 読み上げ';
+  };
+  
+  utterance.onerror = (e) => {
+    console.error('読み上げエラー:', e);
+    $('#btnRead').textContent = '🔊 読み上げ';
+  };
+  
+  speechSynthesis.speak(utterance);
+}
+
+// ボタンイベント設定
+$('#btnSpeech').onclick = toggleSpeechRecognition;
+$('#btnRead').onclick = readText;
+
+// 初期化
+initSpeechRecognition();
 
 let fileHandle=null;
 function exportJSON(){ flushText(); return JSON.stringify({ v:'v0.8S-FIX21',
