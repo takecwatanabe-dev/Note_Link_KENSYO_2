@@ -143,6 +143,7 @@ body.tb-collapsed .tb-handle{ display:grid }
       <button class="btn" id="btnPrint">印刷</button>
       <button class="btn" id="btnPng">PNG</button>
       <button class="btn" id="btnShare">共有</button>
+      <button class="btn" id="btnSpeak">🔊 読み上げ</button>
       <span id="pageIndicator">1/1</span>
     </div>
     <div id="railHint" class="rail-hint" aria-hidden="true">⇠ スライド ⇢</div>
@@ -903,6 +904,78 @@ addEventListener('pagehide', () => {
 addEventListener('blur', () => {
   saveToLocalStorage(); // 常に保存
 });
+
+/* ===== 音声読み上げ機能 ===== */
+let speechSynthesis = window.speechSynthesis;
+let isSpeaking = false;
+
+function speakText() {
+  // 既に読み上げ中の場合は停止
+  if (isSpeaking) {
+    speechSynthesis.cancel();
+    isSpeaking = false;
+    $('#btnSpeak').textContent = '🔊 読み上げ';
+    return;
+  }
+
+  // テキストレイヤーからすべてのテキストを取得
+  const textElements = textLayer.querySelectorAll('.note-text');
+  
+  if (textElements.length === 0) {
+    alert('読み上げるテキストがありません');
+    return;
+  }
+
+  // すべてのテキストを結合
+  let allText = '';
+  textElements.forEach((element, index) => {
+    const text = element.textContent.replace(/削除$/, '').trim();
+    if (text) {
+      allText += text;
+      if (index < textElements.length - 1) {
+        allText += '。 '; // テキストボックス間に区切りを入れる
+      }
+    }
+  });
+
+  if (!allText) {
+    alert('読み上げるテキストがありません');
+    return;
+  }
+
+  // 音声合成の設定
+  const utterance = new SpeechSynthesisUtterance(allText);
+  utterance.lang = 'ja-JP'; // 日本語に設定
+  utterance.rate = 1.0; // 速度（0.1〜10）
+  utterance.pitch = 1.0; // 音程（0〜2）
+  utterance.volume = 1.0; // 音量（0〜1）
+
+  // 読み上げ開始時
+  utterance.onstart = () => {
+    isSpeaking = true;
+    $('#btnSpeak').textContent = '⏹ 停止';
+  };
+
+  // 読み上げ終了時
+  utterance.onend = () => {
+    isSpeaking = false;
+    $('#btnSpeak').textContent = '🔊 読み上げ';
+  };
+
+  // エラー時
+  utterance.onerror = (event) => {
+    console.error('音声合成エラー:', event);
+    isSpeaking = false;
+    $('#btnSpeak').textContent = '🔊 読み上げ';
+    alert('音声読み上げに失敗しました');
+  };
+
+  // 読み上げ開始
+  speechSynthesis.speak(utterance);
+}
+
+// 読み上げボタンのイベントリスナー
+$('#btnSpeak').onclick = speakText;
 </script>
 </body>
 </html>
